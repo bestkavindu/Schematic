@@ -11,24 +11,30 @@
 @endphp
 
 <div class="dash screen-fade" x-data="schematicDashboard(@js($projects))" x-cloak>
-    <div class="dash-nav">
-        <div class="nav-brand">
-            <div class="nav-logo" x-html="icon('Database', { size: 16 })"></div>
-            <span class="nav-wordmark">Schematic</span>
+    {{-- Main-site navbar — shared look with the landing header --}}
+    <header class="site-nav">
+        <div class="site-nav-inner">
+            <a class="site-brand" href="{{ route('schemas.index') }}" wire:navigate>
+                <span class="site-brand-logo">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.7 4 3 9 3s9-1.3 9-3V5"/><path d="M3 12c0 1.7 4 3 9 3s9-1.3 9-3"/></svg>
+                </span>
+                Schematic
+            </a>
+            <nav class="site-nav-links">
+                <a class="site-nav-link active" href="{{ route('schemas.index') }}" wire:navigate>Schemas</a>
+                <a class="site-nav-link" href="{{ route('home') }}#features">Features</a>
+                <a class="site-nav-link" href="{{ route('home') }}#pricing">Pricing</a>
+                <a class="site-nav-link" href="{{ route('schemas.demo') }}" wire:navigate>Live demo</a>
+            </nav>
+            <div class="site-nav-spacer"></div>
+            <div class="site-nav-cta">
+                <button class="btn btn-primary" @click="newProject()">
+                    <span x-html="icon('Plus', { size: 15 })" style="display:flex"></span> New Project
+                </button>
+                <div class="avatar" title="{{ $user->name }}">{{ $user->initials() }}</div>
+            </div>
         </div>
-        <div class="search" style="width: 280px; margin-left: 14px;">
-            <span x-html="icon('Search', { size: 15 })" style="display:flex"></span>
-            <input placeholder="Search projects" x-model="q" />
-        </div>
-        <div class="nav-spacer"></div>
-        <a href="{{ route('dashboard') }}" wire:navigate class="btn btn-icon btn-ghost" title="Back to app"
-           x-html="icon('Layout', { size: 16 })"></a>
-        <button class="btn btn-primary" @click="newProject()">
-            <span x-html="icon('Plus', { size: 15 })" style="display:flex"></span> New Project
-        </button>
-        <div class="nav-divider"></div>
-        <div class="avatar" title="{{ $user->name }}">{{ $user->initials() }}</div>
-    </div>
+    </header>
 
     <div class="dash-main">
         <div class="dash-head">
@@ -36,9 +42,10 @@
                 <h1 class="dash-h1">Your schemas</h1>
                 <p class="dash-sub" x-text="projects.length + ' project' + (projects.length === 1 ? '' : 's') + ' · Laravel workspace'"></p>
             </div>
-            <button class="btn" @click="newProject()">
-                <span x-html="icon('Plus', { size: 15 })" style="display:flex"></span> New Project
-            </button>
+            <div class="search" style="width: 280px;">
+                <span x-html="icon('Search', { size: 15 })" style="display:flex"></span>
+                <input placeholder="Search projects" x-model="q" />
+            </div>
         </div>
 
         <div class="dash-tabs">

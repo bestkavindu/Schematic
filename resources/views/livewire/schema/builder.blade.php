@@ -1,4 +1,4 @@
-@php $user = auth()->user(); @endphp
+@php $user = auth()->user(); $demo = $demo ?? false; @endphp
 
 <div class="app" x-data="schematicBuilder(@js($this->schema))" x-cloak>
     {{-- ───────── Navbar ───────── --}}
@@ -8,8 +8,12 @@
             <span class="nav-wordmark">Schematic</span>
         </div>
         <div class="nav-divider"></div>
-        <a href="{{ route('schemas.index') }}" wire:navigate class="proj-crumb btn btn-ghost" style="padding: 5px 8px; height: 30px;">Projects</a>
-        <span x-html="icon('ChevronRight', { size: 14 })" style="color: var(--faint); display:flex;"></span>
+        @unless($demo)
+            <a href="{{ route('schemas.index') }}" wire:navigate class="proj-crumb btn btn-ghost" style="padding: 5px 8px; height: 30px;">Projects</a>
+            <span x-html="icon('ChevronRight', { size: 14 })" style="color: var(--faint); display:flex;"></span>
+        @else
+            <span class="proj-crumb" style="font-size: 12px; font-weight: 600; color: var(--accent); background: var(--accent-tint, rgba(99,102,241,.12)); padding: 4px 9px; border-radius: 6px;">Demo</span>
+        @endunless
         <input class="proj-name" x-model="projectName" spellcheck="false" @keydown.enter="$event.target.blur()" />
 
         <div class="nav-spacer"></div>
@@ -21,12 +25,21 @@
         <button class="btn" @click="exportSql()">
             <span x-html="icon('Download', { size: 15 })" style="display:flex"></span> Export SQL
         </button>
-        <button class="btn btn-primary" @click="save()" :disabled="saving">
-            <span x-html="icon('Save', { size: 15 })" style="display:flex"></span>
-            <span x-text="saving ? 'Saving…' : 'Save'"></span>
-        </button>
+        @unless($demo)
+            <button class="btn btn-primary" @click="save()" :disabled="saving">
+                <span x-html="icon('Save', { size: 15 })" style="display:flex"></span>
+                <span x-text="saving ? 'Saving…' : 'Save'"></span>
+            </button>
+        @else
+            <a class="btn btn-primary" href="{{ route('register') }}">
+                <span x-html="icon('Save', { size: 15 })" style="display:flex"></span> Sign up to save
+            </a>
+        @endunless
 
         <div class="nav-divider"></div>
+        @if($demo)
+            <a class="btn btn-ghost" href="{{ route('login') }}">Sign in</a>
+        @else
         <div style="position: relative;">
             <div class="avatar" @click="avatarMenu = !avatarMenu" title="{{ $user->name }}">{{ $user->initials() }}</div>
             <template x-if="avatarMenu">
@@ -40,8 +53,8 @@
                     <a class="menu-item" href="{{ route('profile.edit') }}" wire:navigate @click="avatarMenu = false">
                         <span x-html="icon('Edit', { size: 15 })" style="display:flex"></span><span>Settings</span>
                     </a>
-                    <a class="menu-item" href="{{ route('dashboard') }}" wire:navigate @click="avatarMenu = false">
-                        <span x-html="icon('Layout', { size: 15 })" style="display:flex"></span><span>Back to app</span>
+                    <a class="menu-item" href="{{ route('schemas.index') }}" wire:navigate @click="avatarMenu = false">
+                        <span x-html="icon('Layout', { size: 15 })" style="display:flex"></span><span>All schemas</span>
                     </a>
                     <div class="menu-sep"></div>
                     <form method="POST" action="{{ route('logout') }}">
@@ -53,6 +66,7 @@
                 </div>
             </template>
         </div>
+        @endif
     </div>
 
     {{-- ───────── Body ───────── --}}

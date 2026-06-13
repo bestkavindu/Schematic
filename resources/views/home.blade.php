@@ -1,9 +1,10 @@
 @php
     // Marketing CTAs resolve to real app routes:
-    //  - guests are sent to sign in / register
-    //  - authenticated users go straight into the schema builder
-    $appUrl   = auth()->check() ? route('schemas.index') : route('login');
-    $startUrl = auth()->check() ? route('schemas.index') : route('register');
+    //  - "try / demo" CTAs let guests into the no-account sandbox
+    //  - "sign up / pricing" CTAs send guests to register
+    //  - authenticated users go straight into their schema list
+    $tryUrl    = auth()->check() ? route('schemas.index') : route('schemas.demo');
+    $signupUrl = auth()->check() ? route('schemas.index') : route('register');
     $signInUrl = route('login');
 @endphp
 <!DOCTYPE html>
@@ -37,12 +38,12 @@
       <a class="nav-link" href="#features">Features</a>
       <a class="nav-link" href="#how">How it works</a>
       <a class="nav-link" href="#pricing">Pricing</a>
-      <a class="nav-link" href="{{ $appUrl }}">Live demo</a>
+      <a class="nav-link" href="{{ $tryUrl }}">Live demo</a>
     </nav>
     <div class="nav-spacer"></div>
     <div class="nav-cta">
       <a class="btn btn-ghost btn-sm" href="{{ $signInUrl }}">Sign in</a>
-      <a class="btn btn-primary btn-sm" href="{{ $appUrl }}">Open app
+      <a class="btn btn-primary btn-sm" href="{{ $tryUrl }}">Open app
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
       </a>
     </div>
@@ -55,8 +56,8 @@
   <a href="#features">Features</a>
   <a href="#how">How it works</a>
   <a href="#pricing">Pricing</a>
-  <a href="{{ $appUrl }}">Live demo</a>
-  <a class="btn btn-primary" href="{{ $appUrl }}">Open app</a>
+  <a href="{{ $tryUrl }}">Live demo</a>
+  <a class="btn btn-primary" href="{{ $tryUrl }}">Open app</a>
 </div>
 
 <span id="top"></span>
@@ -69,8 +70,8 @@
     <h1 class="hero-title">Design your database<br>visually. Ship <span class="grad">Laravel migrations</span> in minutes.</h1>
     <p class="hero-sub">Schematic is the visual schema builder for Laravel teams. Drag out tables, draw relationships, and export clean migrations — no more second-guessing your foreign keys.</p>
     <div class="hero-cta">
-      <a class="btn btn-primary btn-lg" href="{{ $startUrl }}">Start building — it's free</a>
-      <a class="btn btn-ghost btn-lg" href="{{ $appUrl }}">
+      <a class="btn btn-primary btn-lg" href="{{ $tryUrl }}">Start building — no sign-up</a>
+      <a class="btn btn-ghost btn-lg" href="{{ $tryUrl }}">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="m10 9 5 3-5 3z" fill="currentColor" stroke="none"/></svg>
         Watch demo
       </a>
@@ -333,7 +334,7 @@
           <li><span class="ck"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg></span>Unlimited tables</li>
           <li><span class="ck"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg></span>Migration &amp; SQL export</li>
         </ul>
-        <a class="btn btn-ghost" style="width:100%" href="{{ $startUrl }}">Get started</a>
+        <a class="btn btn-ghost" style="width:100%" href="{{ $signupUrl }}">Get started</a>
       </div>
       <div class="plan featured reveal">
         <div class="plan-badge">MOST POPULAR</div>
@@ -346,7 +347,7 @@
           <li><span class="ck"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg></span>Schema diffing &amp; history</li>
           <li><span class="ck"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg></span>Comments &amp; share links</li>
         </ul>
-        <a class="btn btn-primary" style="width:100%" href="{{ $startUrl }}">Start free trial</a>
+        <a class="btn btn-primary" style="width:100%" href="{{ $signupUrl }}">Start free trial</a>
       </div>
       <div class="plan reveal">
         <div class="plan-name">Enterprise</div>
@@ -371,7 +372,7 @@
       <h2>Design your next schema in the open</h2>
       <p>Join thousands of Laravel developers building their database visually.</p>
       <div class="hero-cta">
-        <a class="btn btn-white btn-lg" href="{{ $appUrl }}">Open the builder</a>
+        <a class="btn btn-white btn-lg" href="{{ $tryUrl }}">Open the builder</a>
         <a class="btn btn-ondark btn-lg" href="#features">See features</a>
       </div>
     </div>
@@ -389,7 +390,7 @@
         </a>
         <p class="footer-brand-desc">The visual database schema builder built for Laravel developers.</p>
       </div>
-      <div class="footer-col"><h4>Product</h4><a href="#features">Features</a><a href="#pricing">Pricing</a><a href="{{ $appUrl }}">Live demo</a><a href="#">Changelog</a></div>
+      <div class="footer-col"><h4>Product</h4><a href="#features">Features</a><a href="#pricing">Pricing</a><a href="{{ $tryUrl }}">Live demo</a><a href="#">Changelog</a></div>
       <div class="footer-col"><h4>Resources</h4><a href="#">Documentation</a><a href="#">Laravel guide</a><a href="#">Templates</a><a href="#">API</a></div>
       <div class="footer-col"><h4>Company</h4><a href="#">About</a><a href="#">Blog</a><a href="#">Careers</a><a href="#">Contact</a></div>
       <div class="footer-col"><h4>Legal</h4><a href="#">Privacy</a><a href="#">Terms</a><a href="#">Security</a></div>
