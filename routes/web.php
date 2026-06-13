@@ -4,7 +4,7 @@ use App\Livewire\Schema\Builder as SchemaBuilder;
 use App\Livewire\Schema\Index as SchemaIndex;
 use Illuminate\Support\Facades\Route;
 
-Route::view('/', 'welcome')->name('home');
+Route::view('/', 'home')->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::view('dashboard', 'dashboard')->name('dashboard');
