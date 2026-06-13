@@ -281,7 +281,7 @@
 
             {{-- relationship line popover --}}
             <template x-if="relMenu">
-                <div class="menu" :style="menuStyle(relMenu)" @click.outside="relMenu = null" @keydown.escape.window="relMenu = null">
+                <div class="menu" :style="menuStyle(relMenu)" @pointerdown.outside="relMenu = null" @keydown.escape.window="relMenu = null">
                     <button class="menu-item danger" @click="deleteRel(relMenu.relId)">
                         <span x-html="icon('Trash', { size: 15 })" style="display:flex"></span><span>Delete relationship</span>
                     </button>
