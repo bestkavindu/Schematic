@@ -46,7 +46,7 @@ class Demo extends Component
                     'x' => 470, 'y' => 60, 'indexes' => [],
                     'columns' => [
                         ['id' => 'p_id', 'name' => 'id', 'type' => 'id', 'nullable' => false, 'pk' => true, 'unique' => false, 'index' => false, 'default' => '', 'fk' => null],
-                        ['id' => 'p_user', 'name' => 'user_id', 'type' => 'unsignedBigInteger', 'nullable' => false, 'pk' => false, 'unique' => false, 'index' => true, 'default' => '', 'fk' => ['table' => 'users', 'column' => 'id']],
+                        ['id' => 'p_user', 'name' => 'user_id', 'type' => 'unsignedBigInteger', 'nullable' => false, 'pk' => false, 'unique' => false, 'index' => true, 'default' => '', 'fk' => ['table' => 'users', 'column' => 'id', 'type' => '1:N', 'onDelete' => 'cascade', 'onUpdate' => 'no action']],
                         ['id' => 'p_title', 'name' => 'title', 'type' => 'string', 'nullable' => false, 'pk' => false, 'unique' => false, 'index' => false, 'default' => '', 'fk' => null],
                         ['id' => 'p_body', 'name' => 'body', 'type' => 'text', 'nullable' => false, 'pk' => false, 'unique' => false, 'index' => false, 'default' => '', 'fk' => null],
                         ['id' => 'p_pub', 'name' => 'published_at', 'type' => 'datetime', 'nullable' => true, 'pk' => false, 'unique' => false, 'index' => false, 'default' => '', 'fk' => null],
@@ -57,7 +57,8 @@ class Demo extends Component
                     'x' => 470, 'y' => 330, 'indexes' => [],
                     'columns' => [
                         ['id' => 'c_id', 'name' => 'id', 'type' => 'id', 'nullable' => false, 'pk' => true, 'unique' => false, 'index' => false, 'default' => '', 'fk' => null],
-                        ['id' => 'c_post', 'name' => 'post_id', 'type' => 'unsignedBigInteger', 'nullable' => false, 'pk' => false, 'unique' => false, 'index' => true, 'default' => '', 'fk' => ['table' => 'posts', 'column' => 'id']],
+                        ['id' => 'c_post', 'name' => 'post_id', 'type' => 'unsignedBigInteger', 'nullable' => false, 'pk' => false, 'unique' => false, 'index' => true, 'default' => '', 'fk' => ['table' => 'posts', 'column' => 'id', 'type' => '1:N', 'onDelete' => 'cascade', 'onUpdate' => 'no action']],
+                        ['id' => 'c_user', 'name' => 'user_id', 'type' => 'unsignedBigInteger', 'nullable' => true, 'pk' => false, 'unique' => false, 'index' => true, 'default' => '', 'fk' => ['table' => 'users', 'column' => 'id', 'type' => '1:N', 'onDelete' => 'set null', 'onUpdate' => 'no action']],
                         ['id' => 'c_body', 'name' => 'body', 'type' => 'text', 'nullable' => false, 'pk' => false, 'unique' => false, 'index' => false, 'default' => '', 'fk' => null],
                     ],
                 ],

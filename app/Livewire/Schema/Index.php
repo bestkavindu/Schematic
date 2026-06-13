@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Schema;
 
+use App\Livewire\Actions\Logout;
 use App\Models\SchemaProject;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Collection;
@@ -38,6 +39,16 @@ class Index extends Component
             ->with(['tables' => fn ($query) => $query->select('id', 'schema_project_id', 'color')])
             ->latest('updated_at')
             ->get();
+    }
+
+    /**
+     * Log the current user out and send them to the landing page.
+     */
+    public function logout(Logout $logout): void
+    {
+        $logout();
+
+        $this->redirect('/', navigate: true);
     }
 
     public function render(): View

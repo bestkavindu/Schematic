@@ -42,10 +42,16 @@
     </nav>
     <div class="nav-spacer"></div>
     <div class="nav-cta">
-      <a class="btn btn-ghost btn-sm" href="{{ $signInUrl }}">Sign in</a>
-      <a class="btn btn-primary btn-sm" href="{{ $tryUrl }}">Open app
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
-      </a>
+      @auth
+        <a class="btn btn-primary btn-sm" href="{{ route('schemas.index') }}">Your diagrams
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+        </a>
+      @else
+        <a class="btn btn-ghost btn-sm" href="{{ $signInUrl }}">Sign in</a>
+        <a class="btn btn-primary btn-sm" href="{{ $tryUrl }}">Open app
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+        </a>
+      @endauth
     </div>
     <button class="nav-toggle" id="navToggle" aria-label="Menu">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
@@ -57,7 +63,11 @@
   <a href="#how">How it works</a>
   <a href="#pricing">Pricing</a>
   <a href="{{ $tryUrl }}">Live demo</a>
-  <a class="btn btn-primary" href="{{ $tryUrl }}">Open app</a>
+  @auth
+    <a class="btn btn-primary" href="{{ route('schemas.index') }}">Your diagrams</a>
+  @else
+    <a class="btn btn-primary" href="{{ $tryUrl }}">Open app</a>
+  @endauth
 </div>
 
 <span id="top"></span>

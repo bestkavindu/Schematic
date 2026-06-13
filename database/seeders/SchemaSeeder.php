@@ -44,17 +44,24 @@ class SchemaSeeder extends Seeder
             ]);
 
             foreach ($table['columns'] as $colSort => $col) {
+                $fk = $col['fk'] ?? null;
+                $hasFk = is_array($fk);
+                $nullable = $col['nullable'] ?? false;
+
                 $row->columns()->create([
                     'client_id' => $col['id'],
                     'name' => $col['name'],
                     'type' => $col['type'],
-                    'is_nullable' => $col['nullable'] ?? false,
+                    'is_nullable' => $nullable,
                     'is_pk' => $col['pk'] ?? false,
                     'is_unique' => $col['unique'] ?? false,
                     'is_index' => $col['index'] ?? false,
                     'default_value' => ($col['default'] ?? '') !== '' ? $col['default'] : null,
-                    'fk_table' => $col['fk']['table'] ?? null,
-                    'fk_column' => $col['fk']['column'] ?? null,
+                    'fk_table' => $hasFk ? ($fk['table'] ?? null) : null,
+                    'fk_column' => $hasFk ? ($fk['column'] ?? 'id') : null,
+                    'fk_type' => $hasFk ? ($fk['type'] ?? '1:N') : null,
+                    'fk_on_delete' => $hasFk ? ($fk['onDelete'] ?? ($nullable ? 'set null' : 'cascade')) : null,
+                    'fk_on_update' => $hasFk ? ($fk['onUpdate'] ?? 'no action') : null,
                     'sort' => $colSort,
                 ]);
             }
@@ -103,7 +110,7 @@ class SchemaSeeder extends Seeder
                 'indexes' => ['posts_user_id_published_at_index'],
                 'columns' => [
                     $this->col('p1', 'id', 'id', ['pk' => true]),
-                    $this->col('p2', 'user_id', 'unsignedBigInteger', ['fk' => ['table' => 't_users', 'column' => 'id'], 'index' => true]),
+                    $this->col('p2', 'user_id', 'unsignedBigInteger', ['fk' => ['table' => 't_users', 'column' => 'id', 'type' => '1:N', 'onDelete' => 'cascade', 'onUpdate' => 'no action'], 'index' => true]),
                     $this->col('p3', 'title', 'string'),
                     $this->col('p4', 'slug', 'string', ['unique' => true]),
                     $this->col('p5', 'body', 'text'),
@@ -117,12 +124,25 @@ class SchemaSeeder extends Seeder
                 'indexes' => [],
                 'columns' => [
                     $this->col('cm1', 'id', 'id', ['pk' => true]),
-                    $this->col('cm2', 'post_id', 'unsignedBigInteger', ['fk' => ['table' => 't_posts', 'column' => 'id'], 'index' => true]),
-                    $this->col('cm3', 'user_id', 'unsignedBigInteger', ['fk' => ['table' => 't_users', 'column' => 'id'], 'index' => true]),
+                    $this->col('cm2', 'post_id', 'unsignedBigInteger', ['fk' => ['table' => 't_posts', 'column' => 'id', 'type' => '1:N', 'onDelete' => 'cascade', 'onUpdate' => 'no action'], 'index' => true]),
+                    $this->col('cm3', 'user_id', 'unsignedBigInteger', ['nullable' => true, 'fk' => ['table' => 't_users', 'column' => 'id', 'type' => '1:N', 'onDelete' => 'set null', 'onUpdate' => 'no action'], 'index' => true]),
                     $this->col('cm4', 'body', 'text'),
                     $this->col('cm5', 'approved', 'boolean', ['default' => 'false']),
                     $this->col('cm6', 'created_at', 'timestamp', ['nullable' => true]),
                     $this->col('cm7', 'updated_at', 'timestamp', ['nullable' => true]),
+                ],
+            ],
+            [
+                'id' => 't_profiles', 'name' => 'profiles', 'color' => 'pink', 'x' => 80, 'y' => 320,
+                'indexes' => ['profiles_user_id_unique'],
+                'columns' => [
+                    $this->col('pr1', 'id', 'id', ['pk' => true]),
+                    // One-to-one: each user has at most one profile (unique FK column).
+                    $this->col('pr2', 'user_id', 'unsignedBigInteger', ['unique' => true, 'fk' => ['table' => 't_users', 'column' => 'id', 'type' => '1:1', 'onDelete' => 'cascade', 'onUpdate' => 'no action']]),
+                    $this->col('pr3', 'bio', 'text', ['nullable' => true]),
+                    $this->col('pr4', 'avatar_url', 'string', ['nullable' => true]),
+                    $this->col('pr5', 'created_at', 'timestamp', ['nullable' => true]),
+                    $this->col('pr6', 'updated_at', 'timestamp', ['nullable' => true]),
                 ],
             ],
             [
@@ -141,8 +161,8 @@ class SchemaSeeder extends Seeder
                 'indexes' => ['role_user_role_id_user_id_unique'],
                 'columns' => [
                     $this->col('ru1', 'id', 'id', ['pk' => true]),
-                    $this->col('ru2', 'role_id', 'unsignedBigInteger', ['fk' => ['table' => 't_roles', 'column' => 'id']]),
-                    $this->col('ru3', 'user_id', 'unsignedBigInteger', ['fk' => ['table' => 't_users', 'column' => 'id']]),
+                    $this->col('ru2', 'role_id', 'unsignedBigInteger', ['fk' => ['table' => 't_roles', 'column' => 'id', 'type' => '1:N', 'onDelete' => 'cascade', 'onUpdate' => 'no action']]),
+                    $this->col('ru3', 'user_id', 'unsignedBigInteger', ['fk' => ['table' => 't_users', 'column' => 'id', 'type' => '1:N', 'onDelete' => 'cascade', 'onUpdate' => 'no action']]),
                 ],
             ],
             [
@@ -161,8 +181,8 @@ class SchemaSeeder extends Seeder
                 'indexes' => ['category_post_post_id_category_id_unique'],
                 'columns' => [
                     $this->col('cp1', 'id', 'id', ['pk' => true]),
-                    $this->col('cp2', 'post_id', 'unsignedBigInteger', ['fk' => ['table' => 't_posts', 'column' => 'id']]),
-                    $this->col('cp3', 'category_id', 'unsignedBigInteger', ['fk' => ['table' => 't_categories', 'column' => 'id']]),
+                    $this->col('cp2', 'post_id', 'unsignedBigInteger', ['fk' => ['table' => 't_posts', 'column' => 'id', 'type' => '1:N', 'onDelete' => 'cascade', 'onUpdate' => 'no action']]),
+                    $this->col('cp3', 'category_id', 'unsignedBigInteger', ['fk' => ['table' => 't_categories', 'column' => 'id', 'type' => '1:N', 'onDelete' => 'cascade', 'onUpdate' => 'no action']]),
                 ],
             ],
         ];

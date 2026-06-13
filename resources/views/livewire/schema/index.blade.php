@@ -7,33 +7,107 @@
         'colors' => $p->tables->pluck('color')->unique()->values()->take(4)->all() ?: ['blue'],
         'url' => route('schemas.builder', $p),
     ])->values();
+
     $user = auth()->user();
+    $initials = collect(explode(' ', trim($user->name)))
+        ->filter()
+        ->take(2)
+        ->map(fn ($w) => mb_strtoupper(mb_substr($w, 0, 1)))
+        ->implode('') ?: mb_strtoupper(mb_substr($user->email, 0, 1));
+    $memberSince = optional($user->created_at)->format('F Y') ?? '—';
+    $verified = ! method_exists($user, 'hasVerifiedEmail') || $user->hasVerifiedEmail();
 @endphp
 
 <div class="dash screen-fade" x-data="schematicDashboard(@js($projects))" x-cloak>
-    {{-- Main-site navbar — shared look with the landing header --}}
-    <header class="site-nav">
-        <div class="site-nav-inner">
-            <a class="site-brand" href="{{ route('schemas.index') }}" wire:navigate>
-                <span class="site-brand-logo">
-                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.7 4 3 9 3s9-1.3 9-3V5"/><path d="M3 12c0 1.7 4 3 9 3s9-1.3 9-3"/></svg>
-                </span>
-                Schematic
-            </a>
-            <nav class="site-nav-links">
-                <a class="site-nav-link active" href="{{ route('schemas.index') }}" wire:navigate>Schemas</a>
-                <a class="site-nav-link" href="{{ route('home') }}#features">Features</a>
-                <a class="site-nav-link" href="{{ route('home') }}#pricing">Pricing</a>
-                <a class="site-nav-link" href="{{ route('schemas.demo') }}" wire:navigate>Live demo</a>
-            </nav>
-            <div class="site-nav-spacer"></div>
-            <div class="site-nav-cta">
-                <button class="btn btn-primary" @click="newProject()">
-                    <span x-html="icon('Plus', { size: 15 })" style="display:flex"></span> New Project
+
+    {{-- ---------- top bar with brand + account menu ---------- --}}
+    <header class="dash-topbar" x-data="{ menu: false, profile: false }" @keydown.escape.window="menu = false; profile = false">
+        <a class="topbar-brand" href="{{ route('home') }}" wire:navigate>
+            <span class="topbar-logo" x-html="icon('Database', { size: 17 })"></span>
+            Schematic
+        </a>
+
+        <div class="topbar-spacer"></div>
+
+        {{-- account dropdown --}}
+        <div class="acct" @click.outside="menu = false">
+            <button type="button" class="acct-btn" :class="{ open: menu }" @click="menu = !menu" aria-label="Account menu">
+                <span class="avatar">{{ $initials }}</span>
+                <span class="acct-name">{{ $user->name }}</span>
+                <span class="acct-chev" :class="{ flip: menu }" x-html="icon('ChevronDown', { size: 14 })"></span>
+            </button>
+
+            <div class="menu acct-menu" x-show="menu" x-transition.origin.top.right style="display:none" @click="menu = false">
+                <div class="acct-head">
+                    <span class="avatar avatar-lg">{{ $initials }}</span>
+                    <div class="acct-head-meta">
+                        <div class="acct-head-name">{{ $user->name }}</div>
+                        <div class="acct-head-email">{{ $user->email }}</div>
+                    </div>
+                </div>
+                <div class="menu-sep"></div>
+                <button type="button" class="menu-item" @click="profile = true">
+                    <span x-html="icon('Search', { size: 15 })" style="display:flex"></span>
+                    View profile
                 </button>
-                <div class="avatar" title="{{ $user->name }}">{{ $user->initials() }}</div>
+                <a class="menu-item" href="{{ route('profile.edit') }}" wire:navigate>
+                    <span x-html="icon('Edit', { size: 15 })" style="display:flex"></span>
+                    Edit profile
+                </a>
+                <a class="menu-item" href="{{ route('appearance.edit') }}" wire:navigate>
+                    <span x-html="icon('Palette', { size: 15 })" style="display:flex"></span>
+                    Appearance
+                </a>
+                <div class="menu-sep"></div>
+                <button type="button" class="menu-item danger" wire:click="logout">
+                    <span x-html="icon('X', { size: 15 })" style="display:flex"></span>
+                    Log out
+                </button>
             </div>
         </div>
+
+        {{-- ---------- view-profile modal ---------- --}}
+        <template x-teleport="body">
+            <div class="pf-scrim" x-show="profile" x-transition.opacity style="display:none" @click="profile = false">
+                <div class="pf-card" @click.stop x-show="profile" x-transition.scale.origin.top>
+                    <button type="button" class="pf-close" @click="profile = false" aria-label="Close" x-html="icon('X', { size: 16 })"></button>
+
+                    <div class="pf-hero">
+                        <span class="avatar avatar-xl">{{ $initials }}</span>
+                        <div class="pf-name">{{ $user->name }}</div>
+                        <div class="pf-email">{{ $user->email }}</div>
+                        @if ($verified)
+                            <span class="pf-badge ok"><span x-html="icon('Check', { size: 12 })" style="display:flex"></span> Verified</span>
+                        @else
+                            <span class="pf-badge warn">Unverified email</span>
+                        @endif
+                    </div>
+
+                    <div class="pf-stats">
+                        <div class="pf-stat">
+                            <div class="pf-stat-n" x-text="projects.length"></div>
+                            <div class="pf-stat-l">Projects</div>
+                        </div>
+                        <div class="pf-stat">
+                            <div class="pf-stat-n" x-text="projects.reduce((s, p) => s + p.tables, 0)"></div>
+                            <div class="pf-stat-l">Tables</div>
+                        </div>
+                        <div class="pf-stat">
+                            <div class="pf-stat-n pf-stat-sm">{{ $memberSince }}</div>
+                            <div class="pf-stat-l">Member since</div>
+                        </div>
+                    </div>
+
+                    <div class="pf-actions">
+                        <a class="btn btn-primary" href="{{ route('profile.edit') }}" wire:navigate>
+                            <span x-html="icon('Edit', { size: 14 })" style="display:flex"></span>
+                            Edit profile
+                        </a>
+                        <button type="button" class="btn" @click="profile = false">Close</button>
+                    </div>
+                </div>
+            </div>
+        </template>
     </header>
 
     <div class="dash-main">

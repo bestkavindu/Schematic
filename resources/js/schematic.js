@@ -15,6 +15,9 @@ const LARAVEL_TYPES = [
     'boolean', 'date', 'datetime', 'timestamp', 'json', 'decimal', 'float', 'uuid',
 ];
 
+// Referential actions offered for relationships (ON DELETE / ON UPDATE).
+const FK_ACTIONS = ['cascade', 'restrict', 'set null', 'no action'];
+
 const TYPE_LABEL = {
     id: 'bigint', bigInteger: 'bigint', unsignedBigInteger: 'bigint',
     integer: 'int', string: 'varchar', text: 'text', boolean: 'boolean',
@@ -191,8 +194,14 @@ function schematicBuilder(initial) {
         dirty: false,
         saving: false,
 
+        // relationship drag-to-connect + selection state
+        linkDraft: null,
+        selectedRelId: null,
+        relMenu: null,
+
         colorKeys: COLOR_KEYS,
         types: LARAVEL_TYPES,
+        fkActions: FK_ACTIONS,
 
         init() {
             this.applyAccent();
@@ -270,9 +279,10 @@ function schematicBuilder(initial) {
         // Build the relationship layer as one SVG string (x-html keeps children in the SVG namespace).
         relsSvg() {
             return this.rels.map((r) => {
-                const on = this.relActive(r);
+                const sel = this.selectedRelId === r.id;
+                const on = this.relActive(r) || sel;
                 const stroke = on ? r.color : '#cdcdd4';
-                const w = on ? 2 : 1.5;
+                const w = sel ? 2.6 : (on ? 2 : 1.5);
                 const cr = on ? 2.4 : 0;
                 return `<g opacity="${on ? 1 : 0.85}" style="transition:opacity .15s">`
                     + `<path d="${r.path}" fill="none" stroke="${stroke}" stroke-width="${w}"></path>`
@@ -282,6 +292,42 @@ function schematicBuilder(initial) {
                     + `<circle cx="${r.barX}" cy="${r.by}" r="${cr}" fill="${stroke}"></circle>`
                     + '</g>';
             }).join('');
+        },
+
+        // Transparent, fat, clickable copies of each line so relationships can be selected.
+        relsHitSvg() {
+            return this.rels.map((r) =>
+                `<path d="${r.path}" data-rel="${r.id}" fill="none" stroke="transparent"`
+                + ` stroke-width="12" style="pointer-events:stroke;cursor:pointer"></path>`
+            ).join('');
+        },
+
+        // Live preview line while dragging a new relationship.
+        linkPreviewSvg() {
+            const ld = this.linkDraft;
+            if (!ld) return '';
+            const src = this.tables.find((x) => x.id === ld.srcTableId);
+            if (!src) return '';
+            const color = (this.palette[src.color] || this.palette.blue).bar;
+            const ax = ld.anchor.x, ay = ld.anchor.y;
+            let bx = ld.cur.x, by = ld.cur.y, snapped = false, tDir = -1;
+            if (ld.hover) {
+                const tgt = this.tables.find((x) => x.id === ld.hover.tableId);
+                if (tgt) {
+                    const sC = src.x + GEO.CARD_W / 2, tC = tgt.x + GEO.CARD_W / 2;
+                    const tRight = tC < sC;
+                    bx = tgt.x + (tRight ? GEO.CARD_W : 0);
+                    by = rowCenterY(tgt, ld.hover.colIndex);
+                    tDir = tRight ? 1 : -1;
+                    snapped = true;
+                }
+            }
+            const sDir = ld.side === 'right' ? 1 : -1;
+            const path = relPath(ax, ay, bx, by, sDir, tDir);
+            const dash = snapped ? '' : ' stroke-dasharray="5 5"';
+            return `<path d="${path}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round"${dash} opacity="0.9"></path>`
+                + `<circle cx="${ax}" cy="${ay}" r="3.5" fill="${color}"></circle>`
+                + (snapped ? `<circle cx="${bx}" cy="${by}" r="4" fill="${color}"></circle>` : '');
         },
 
         // related-column highlight map for selected tables
@@ -380,12 +426,72 @@ function schematicBuilder(initial) {
             if (!this.expanded.includes(id)) this.expanded = [...this.expanded, id];
         },
         deleteColumn(table, col) { table.columns = table.columns.filter((c) => c.id !== col.id); },
-        setFk(col, tableId) { col.fk = tableId ? { table: tableId, column: 'id' } : null; },
         toggleEditorCol(id) {
             this.editorOpenCols = this.editorOpenCols.includes(id)
                 ? this.editorOpenCols.filter((x) => x !== id) : [...this.editorOpenCols, id];
         },
         fkTargets(table) { return this.tables.filter((t) => t.id !== table.id); },
+
+        // ----- relationships (foreign keys) -----
+        // A fully-defaulted fk object; onDelete depends on whether the FK column is nullable.
+        fkDefaults(col, tableId, column) {
+            return {
+                table: tableId,
+                column,
+                type: '1:N',
+                onDelete: col.nullable ? 'set null' : 'cascade',
+                onUpdate: 'no action',
+            };
+        },
+        // Best target column for a table: its primary key, else 'id', else the first column.
+        fkDefaultColumn(tableId) {
+            const t = this.tables.find((x) => x.id === tableId);
+            if (!t) return 'id';
+            const pk = t.columns.find((c) => c.pk);
+            if (pk) return pk.name;
+            const id = t.columns.find((c) => c.name === 'id');
+            return id ? id.name : (t.columns[0] ? t.columns[0].name : 'id');
+        },
+        fkColumnsFor(tableId) {
+            const t = this.tables.find((x) => x.id === tableId);
+            return t ? t.columns : [];
+        },
+        setFkTable(col, tableId) {
+            col.fk = tableId ? this.fkDefaults(col, tableId, this.fkDefaultColumn(tableId)) : null;
+        },
+        // Back-compat alias for any caller that still uses the old single-arg form.
+        setFk(col, tableId) { this.setFkTable(col, tableId); },
+        setFkColumn(col, column) { if (col.fk) col.fk.column = column; },
+        setFkType(col, type) {
+            if (!col.fk) return;
+            col.fk.type = type;
+            if (type === '1:1') col.unique = true;   // 1:1 ⇔ unique FK column
+        },
+        setFkAction(col, which, value) { if (col.fk) col.fk[which] = value; },
+        clearFk(col) { col.fk = null; },
+
+        // Optional N:M sugar: build a pivot table between two tables with two wired FKs.
+        createPivot(aId, bId) {
+            const a = this.tables.find((t) => t.id === aId);
+            const b = this.tables.find((t) => t.id === bId);
+            if (!a || !b) return;
+            const piv = blankTable(a.x + 220, a.y + 220, COLOR_KEYS[this.tables.length % 8]);
+            piv.name = [a.name, b.name].sort().join('_');
+            piv.columns = [
+                blankColumn('id', 'id'),
+                blankColumn(a.name + '_id', 'unsignedBigInteger'),
+                blankColumn(b.name + '_id', 'unsignedBigInteger'),
+            ].map((c, i) => { c.id = uid('c'); return c; });
+            piv.columns[0].pk = true;
+            piv.columns[1].index = true;
+            piv.columns[2].index = true;
+            piv.columns[1].fk = this.fkDefaults(piv.columns[1], aId, this.fkDefaultColumn(aId));
+            piv.columns[2].fk = this.fkDefaults(piv.columns[2], bId, this.fkDefaultColumn(bId));
+            this.tables.push(piv);
+            this.selectedIds = [piv.id];
+            this.editorId = piv.id;
+            this.toast('Pivot table created');
+        },
 
         autoArrange() {
             const cols = 3, gapX = 320, gapY = 44, x0 = 80, y0 = 80;
@@ -446,9 +552,66 @@ function schematicBuilder(initial) {
         // ----- pointer drag (pan + card move) -----
         onBgPointerDown(e) {
             if (e.button !== 0 && e.button !== 1) return;
-            if (e.target.closest('.card') || e.target.closest('.canvas-ctrls') || e.target.closest('.canvas-bar') || e.target.closest('.menu')) return;
+            if (e.target.closest('.card') || e.target.closest('.canvas-ctrls') || e.target.closest('.canvas-bar') || e.target.closest('.menu') || e.target.closest('[data-rel]')) return;
             this._drag = { mode: 'pan', startX: e.clientX, startY: e.clientY, tx: this.view.tx, ty: this.view.ty, moved: false };
             if (!e.shiftKey) this.selectedIds = [];
+            this.selectedRelId = null;
+            this.relMenu = null;
+        },
+
+        // ----- relationship drag-to-connect -----
+        // Begin dragging a connector out of a column's edge handle.
+        startLink(e, tableId, colId, side) {
+            if (e.button !== 0) return;
+            e.stopPropagation();   // don't let the card drag / openEditor fire
+            e.preventDefault();
+            const t = this.tables.find((x) => x.id === tableId);
+            if (!t) return;
+            const ci = t.columns.findIndex((c) => c.id === colId);
+            if (ci < 0) return;
+            const ax = t.x + (side === 'right' ? GEO.CARD_W : 0);
+            const ay = rowCenterY(t, ci);
+            const w = this.screenToWorld(e.clientX, e.clientY);
+            this._drag = { mode: 'link', moved: false, startX: e.clientX, startY: e.clientY };
+            this.linkDraft = {
+                srcTableId: tableId, srcColId: colId, srcColIndex: ci, side,
+                anchor: { x: ax, y: ay }, cur: { x: w.x, y: w.y }, hover: null,
+            };
+        },
+        // World-coords -> { tableId, colIndex } | null (geometric inverse of rowCenterY).
+        hitTestColumn(wx, wy) {
+            for (let i = this.tables.length - 1; i >= 0; i--) {
+                const t = this.tables[i];
+                if (wx < t.x || wx > t.x + GEO.CARD_W) continue;
+                const rowsTop = t.y + GEO.HEADER_H;
+                const rowsBottom = rowsTop + t.columns.length * GEO.ROW_H;
+                if (wy < rowsTop || wy >= rowsBottom) continue;
+                const ci = Math.floor((wy - rowsTop) / GEO.ROW_H);
+                if (ci < 0 || ci >= t.columns.length) continue;
+                return { tableId: t.id, colIndex: ci };
+            }
+            return null;
+        },
+        // Commit (or cancel) the in-progress link on pointer-up.
+        finishLink() {
+            const ld = this.linkDraft;
+            if (!ld || !ld.hover) return;   // dropped on empty space / header -> cancel
+            const src = this.tables.find((x) => x.id === ld.srcTableId);
+            const tgt = this.tables.find((x) => x.id === ld.hover.tableId);
+            if (!src || !tgt) return;
+            const col = src.columns.find((c) => c.id === ld.srcColId);
+            const tgtCol = tgt.columns[ld.hover.colIndex];
+            if (!col || !tgtCol) return;
+            if (tgt.id === src.id) { this.toast('Cannot link a column to its own table'); return; }
+            if (col.fk && col.fk.table === tgt.id && col.fk.column === tgtCol.name) {
+                this.toast('That relationship already exists'); return;
+            }
+            col.fk = this.fkDefaults(col, tgt.id, tgtCol.name);
+            this.selectedRelId = src.id + '.' + col.id;
+            this.selectedIds = [src.id, tgt.id];
+            this.toast(tgtCol.pk || tgtCol.unique
+                ? 'Relationship created'
+                : `Linked — note: ${tgt.name}.${tgtCol.name} is not a key`);
         },
         onCardPointerDown(e, id) {
             if (e.button !== 0) return;
@@ -470,6 +633,12 @@ function schematicBuilder(initial) {
             if (!d) return;
             const dx = e.clientX - d.startX, dy = e.clientY - d.startY;
             if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
+            if (d.mode === 'link') {
+                const w = this.screenToWorld(e.clientX, e.clientY);
+                this.linkDraft.cur = { x: w.x, y: w.y };
+                this.linkDraft.hover = this.hitTestColumn(w.x, w.y);
+                return;
+            }
             if (d.mode === 'pan') { this.view = { ...this.view, tx: d.tx + dx, ty: d.ty + dy }; return; }
             const sc = this.view.scale;
             d.ids.forEach((tid) => {
@@ -477,8 +646,42 @@ function schematicBuilder(initial) {
                 if (t) { t.x = d.starts[tid].x + dx / sc; t.y = d.starts[tid].y + dy / sc; }
             });
         },
-        onPointerUp() { this.dragging = []; this._drag = null; },
+        onPointerUp() {
+            if (this._drag && this._drag.mode === 'link') {
+                this.finishLink();
+                this._drag = null;
+                this.linkDraft = null;
+                return;
+            }
+            this.dragging = [];
+            this._drag = null;
+        },
         isDragging(id) { return this.dragging.includes(id); },
+
+        // ----- relationship selection / delete -----
+        onRelPointerDown(e) {
+            const el = e.target.closest('[data-rel]');
+            if (!el) return;
+            this.selectRel(el.getAttribute('data-rel'), e);
+        },
+        selectRel(relId, e) {
+            if (e) e.stopPropagation();
+            this.selectedRelId = relId;
+            const rel = this.rels.find((r) => r.id === relId);
+            if (rel) this.selectedIds = [rel.srcId, rel.tgtId];
+            if (e) this.relMenu = { x: e.clientX, y: e.clientY, relId };
+        },
+        deleteRel(relId) {
+            if (!relId) return;
+            const dot = relId.indexOf('.');
+            const srcId = relId.slice(0, dot), colId = relId.slice(dot + 1);
+            const src = this.tables.find((x) => x.id === srcId);
+            if (src) { const c = src.columns.find((x) => x.id === colId); if (c) c.fk = null; }
+            this.selectedRelId = null;
+            this.relMenu = null;
+            this.toast('Relationship deleted');
+        },
+        clearRelSelection() { this.selectedRelId = null; this.relMenu = null; },
 
         // ----- context menus -----
         onContext(e, id) {
@@ -538,6 +741,14 @@ function schematicBuilder(initial) {
             if (navigator.clipboard) navigator.clipboard.writeText(url).catch(() => {});
             this.toast('Share link copied to clipboard');
         },
+        _download(text, ext, mime) {
+            const blob = new Blob([text], { type: mime });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = (this.projectName || 'schema').replace(/\s+/g, '_').toLowerCase() + ext;
+            a.click();
+            URL.revokeObjectURL(a.href);
+        },
         exportSql() {
             const q = (s) => '`' + s + '`';
             const lines = [];
@@ -555,18 +766,62 @@ function schematicBuilder(initial) {
                 if (pk.length) defs.push(`  PRIMARY KEY (${pk.join(', ')})`);
                 t.columns.filter((c) => c.fk).forEach((c) => {
                     const tgt = this.tables.find((x) => x.id === c.fk.table);
-                    if (tgt) defs.push(`  FOREIGN KEY (${q(c.name)}) REFERENCES ${q(tgt.name)} (${q(c.fk.column)})`);
+                    if (!tgt) return;
+                    let fk = `  FOREIGN KEY (${q(c.name)}) REFERENCES ${q(tgt.name)} (${q(c.fk.column)})`;
+                    const del = (c.fk.onDelete || '').toUpperCase();
+                    const upd = (c.fk.onUpdate || '').toUpperCase();
+                    if (del && del !== 'NO ACTION') fk += ` ON DELETE ${del}`;
+                    if (upd && upd !== 'NO ACTION') fk += ` ON UPDATE ${upd}`;
+                    defs.push(fk);
                 });
                 lines.push(defs.join(',\n'));
                 lines.push(');\n');
             });
-            const blob = new Blob([lines.join('\n')], { type: 'text/sql' });
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = (this.projectName || 'schema').replace(/\s+/g, '_').toLowerCase() + '.sql';
-            a.click();
-            URL.revokeObjectURL(a.href);
+            this._download(lines.join('\n'), '.sql', 'text/sql');
             this.toast('Exported schema.sql');
+        },
+        // Laravel migration export — one Schema::create() per table, with constrained() FKs.
+        exportMigration() {
+            const MIG_TYPE = {
+                id: "id('{n}')", bigInteger: "bigInteger('{n}')", unsignedBigInteger: "unsignedBigInteger('{n}')",
+                integer: "integer('{n}')", string: "string('{n}')", text: "text('{n}')", boolean: "boolean('{n}')",
+                date: "date('{n}')", datetime: "dateTime('{n}')", timestamp: "timestamp('{n}')", json: "json('{n}')",
+                decimal: "decimal('{n}')", float: "float('{n}')", uuid: "uuid('{n}')",
+            };
+            const ON_DELETE = { 'cascade': 'cascadeOnDelete', 'restrict': 'restrictOnDelete', 'set null': 'nullOnDelete' };
+            const ON_UPDATE = { 'cascade': 'cascadeOnUpdate', 'restrict': 'restrictOnUpdate' };
+            const blocks = this.tables.map((t) => {
+                const rows = [];
+                t.columns.forEach((c) => {
+                    // A FK column is emitted as foreignId()->constrained()..., not as a plain column.
+                    if (c.fk) {
+                        const tgt = this.tables.find((x) => x.id === c.fk.table);
+                        if (tgt) {
+                            let line = `            $table->foreignId('${c.name}')`;
+                            if (c.nullable) line += '->nullable()';
+                            line += `->constrained('${tgt.name}')`;
+                            const del = ON_DELETE[(c.fk.onDelete || '').toLowerCase()];
+                            const upd = ON_UPDATE[(c.fk.onUpdate || '').toLowerCase()];
+                            if (del) line += `->${del}()`;
+                            if (upd) line += `->${upd}()`;
+                            rows.push(line + ';');
+                            return;
+                        }
+                    }
+                    let m = (MIG_TYPE[c.type] || "string('{n}')").replace('{n}', c.name);
+                    let line = `            $table->${m}`;
+                    if (c.nullable && c.type !== 'id') line += '->nullable()';
+                    if (c.unique && !c.pk) line += '->unique()';
+                    else if (c.index) line += '->index()';
+                    if (c.default !== '' && c.default != null) line += `->default('${c.default}')`;
+                    rows.push(line + ';');
+                });
+                return `        Schema::create('${t.name}', function (Blueprint $table) {\n${rows.join('\n')}\n        });`;
+            });
+            const body = blocks.join('\n\n');
+            const text = `<?php\n\nuse Illuminate\\Database\\Migrations\\Migration;\nuse Illuminate\\Database\\Schema\\Blueprint;\nuse Illuminate\\Support\\Facades\\Schema;\n\nreturn new class extends Migration\n{\n    public function up(): void\n    {\n${body}\n    }\n\n    public function down(): void\n    {\n${this.tables.slice().reverse().map((t) => `        Schema::dropIfExists('${t.name}');`).join('\n')}\n    }\n};\n`;
+            this._download(text, '_migration.php', 'text/plain');
+            this.toast('Exported Laravel migration');
         },
     };
 }

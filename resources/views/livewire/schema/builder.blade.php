@@ -1,6 +1,8 @@
 @php $user = auth()->user(); $demo = $demo ?? false; @endphp
 
-<div class="app" x-data="schematicBuilder(@js($this->schema))" x-cloak>
+<div class="app" x-data="schematicBuilder(@js($this->schema))" x-cloak
+     @keydown.delete.window="if (selectedRelId && !/^(INPUT|TEXTAREA|SELECT)$/.test($event.target.tagName) && !$event.target.isContentEditable) deleteRel(selectedRelId)"
+     @keydown.backspace.window="if (selectedRelId && !/^(INPUT|TEXTAREA|SELECT)$/.test($event.target.tagName) && !$event.target.isContentEditable) deleteRel(selectedRelId)">
     {{-- ───────── Navbar ───────── --}}
     <div class="nav">
         <div class="nav-brand">
@@ -24,6 +26,9 @@
         </button>
         <button class="btn" @click="exportSql()">
             <span x-html="icon('Download', { size: 15 })" style="display:flex"></span> Export SQL
+        </button>
+        <button class="btn" @click="exportMigration()" title="Export a Laravel migration">
+            <span x-html="icon('Download', { size: 15 })" style="display:flex"></span> Export migration
         </button>
         @unless($demo)
             <button class="btn btn-primary" @click="save()" :disabled="saving">
@@ -152,7 +157,7 @@
              @pointerup.window="onPointerUp()"
              @wheel.prevent="onWheel($event)"
              @contextmenu.prevent="if (!$event.target.closest('.card')) onContext($event, null)"
-             :style="_drag && _drag.mode === 'pan' ? 'cursor: grabbing' : ''">
+             :style="_drag && _drag.mode === 'pan' ? 'cursor: grabbing' : (_drag && _drag.mode === 'link' ? 'cursor: crosshair' : '')">
 
             <div class="canvas-grid" x-show="tweaks.showGrid" :style="gridStyle()"></div>
 
@@ -184,10 +189,14 @@
                             <span class="card-title" x-text="t.name"></span>
                         </div>
                         <template x-for="col in t.columns" :key="col.id">
-                            <div class="card-row" :class="{ hl: isColHl(t, col) }">
+                            <div class="card-row" :class="{ hl: isColHl(t, col), 'link-target': linkDraft && linkDraft.hover && linkDraft.hover.tableId === t.id && t.columns[linkDraft.hover.colIndex] === col }">
+                                <span class="link-handle link-handle-l" title="Drag to connect"
+                                      @pointerdown="startLink($event, t.id, col.id, 'left')"></span>
                                 <span class="card-row-ic" x-html="colIcon(col, tableColor(t))"></span>
                                 <span class="card-col-name"><span :class="{ 'pk-name': col.pk }" x-text="col.name"></span></span>
                                 <span class="card-type" x-text="typeLabel(col)"></span>
+                                <span class="link-handle link-handle-r" title="Drag to connect"
+                                      @pointerdown="startLink($event, t.id, col.id, 'right')"></span>
                             </div>
                         </template>
                         <template x-if="t.indexes && t.indexes.length">
@@ -200,6 +209,11 @@
                         </template>
                     </div>
                 </template>
+
+                {{-- live preview while drawing a new relationship --}}
+                <svg class="link-preview-svg" width="1" height="1" x-show="linkDraft" x-html="linkPreviewSvg()"></svg>
+                {{-- transparent fat copies of each line so relationships are clickable --}}
+                <svg class="rels-hit-svg" width="1" height="1" x-html="relsHitSvg()" @pointerdown="onRelPointerDown($event)"></svg>
             </div>
 
             {{-- canvas info bar --}}
@@ -234,6 +248,11 @@
                             <button class="menu-item" @click="duplicateTable(cardMenu.id); cardMenu = null">
                                 <span x-html="icon('Copy', { size: 15 })" style="display:flex"></span><span>Duplicate</span>
                             </button>
+                            <template x-if="selectedIds.length === 2">
+                                <button class="menu-item" @click="createPivot(selectedIds[0], selectedIds[1]); cardMenu = null">
+                                    <span x-html="icon('Link', { size: 15 })" style="display:flex"></span><span>Create pivot (N:M)</span>
+                                </button>
+                            </template>
                             <div class="menu-sep"></div>
                             <button class="menu-item danger" @click="deleteTable(cardMenu.id); cardMenu = null">
                                 <span x-html="icon('Trash', { size: 15 })" style="display:flex"></span><span>Delete table</span>
@@ -257,6 +276,15 @@
                             </button>
                         </div>
                     </template>
+                </div>
+            </template>
+
+            {{-- relationship line popover --}}
+            <template x-if="relMenu">
+                <div class="menu" :style="menuStyle(relMenu)" @click.outside="relMenu = null" @keydown.escape.window="relMenu = null">
+                    <button class="menu-item danger" @click="deleteRel(relMenu.relId)">
+                        <span x-html="icon('Trash', { size: 15 })" style="display:flex"></span><span>Delete relationship</span>
+                    </button>
                 </div>
             </template>
         </div>
@@ -335,12 +363,48 @@
                                             <button class="switch" :class="{ on: col.pk }" @click="col.pk = !col.pk"></button>
                                         </div>
                                     </div>
-                                    <div class="field">
-                                        <span class="field-label">Foreign key</span>
-                                        <select class="select" :value="col.fk ? col.fk.table : ''" @change="setFk(col, $event.target.value)">
-                                            <option value="">None</option>
-                                            <template x-for="ft in fkTargets(editorTable)" :key="ft.id"><option :value="ft.id" x-text="ft.name + '.id'"></option></template>
-                                        </select>
+                                    <div style="border-top: 1px solid var(--border); padding-top: 10px;">
+                                        <div class="field">
+                                            <span class="field-label">Relationship</span>
+                                            <select class="select" :value="col.fk ? col.fk.table : ''" @change="setFkTable(col, $event.target.value)">
+                                                <option value="">No relationship</option>
+                                                <template x-for="ft in fkTargets(editorTable)" :key="ft.id"><option :value="ft.id" x-text="ft.name"></option></template>
+                                            </select>
+                                        </div>
+                                        <template x-if="col.fk">
+                                            <div>
+                                                <div class="field">
+                                                    <span class="field-label">References column</span>
+                                                    <select class="select" :value="col.fk.column" @change="setFkColumn(col, $event.target.value)">
+                                                        <template x-for="rc in fkColumnsFor(col.fk.table)" :key="rc.id"><option :value="rc.name" x-text="rc.name + (rc.pk ? ' (pk)' : '')"></option></template>
+                                                    </select>
+                                                </div>
+                                                <div class="field">
+                                                    <span class="field-label">Type</span>
+                                                    <div class="seg">
+                                                        <button type="button" class="seg-btn" :class="{ on: col.fk.type === '1:N' }" @click="setFkType(col, '1:N')">1 : N</button>
+                                                        <button type="button" class="seg-btn" :class="{ on: col.fk.type === '1:1' }" @click="setFkType(col, '1:1')">1 : 1</button>
+                                                    </div>
+                                                </div>
+                                                <div class="field-row">
+                                                    <div class="field">
+                                                        <span class="field-label">On delete</span>
+                                                        <select class="select" :value="col.fk.onDelete" @change="setFkAction(col, 'onDelete', $event.target.value)">
+                                                            <template x-for="a in fkActions" :key="a"><option :value="a" x-text="a"></option></template>
+                                                        </select>
+                                                    </div>
+                                                    <div class="field">
+                                                        <span class="field-label">On update</span>
+                                                        <select class="select" :value="col.fk.onUpdate" @change="setFkAction(col, 'onUpdate', $event.target.value)">
+                                                            <template x-for="a in fkActions" :key="a"><option :value="a" x-text="a"></option></template>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                <button class="del-table" style="height: 28px;" @click="clearFk(col)">
+                                                    <span x-html="icon('X', { size: 12 })" style="display:flex"></span> Remove relationship
+                                                </button>
+                                            </div>
+                                        </template>
                                     </div>
                                     <button class="del-table" style="height: 30px;" @click="deleteColumn(editorTable, col)">
                                         <span x-html="icon('Trash', { size: 13 })" style="display:flex"></span> Remove column
