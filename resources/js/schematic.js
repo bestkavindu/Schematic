@@ -831,17 +831,48 @@ function schematicBuilder(initial) {
 }
 
 // ---------- dashboard component ----------
+const RECENTS_KEY = 'schematic.recents';
+const RECENTS_MAX = 12;
+
+function loadRecents() {
+    try {
+        return JSON.parse(localStorage.getItem(RECENTS_KEY)) || {};
+    } catch {
+        return {};
+    }
+}
+
 function schematicDashboard(projects) {
     return {
         projects: projects || [],
         tab: 'All',
         q: '',
         tabs: ['All', 'Recent', 'Shared with me', 'Archived'],
+        recents: {},
         miniThumb,
         icon,
+        init() {
+            this.recents = loadRecents();
+        },
+        recordView(id) {
+            const recents = loadRecents();
+            recents[id] = Date.now();
+            // keep only the most-recent RECENTS_MAX entries
+            const trimmed = Object.entries(recents)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, RECENTS_MAX);
+            this.recents = Object.fromEntries(trimmed);
+            localStorage.setItem(RECENTS_KEY, JSON.stringify(this.recents));
+        },
         get shown() {
             const q = this.q.toLowerCase();
-            return this.projects.filter((p) => p.name.toLowerCase().includes(q));
+            const matches = this.projects.filter((p) => p.name.toLowerCase().includes(q));
+            if (this.tab === 'Recent') {
+                return matches
+                    .filter((p) => this.recents[p.id])
+                    .sort((a, b) => this.recents[b.id] - this.recents[a.id]);
+            }
+            return matches;
         },
         async newProject() { await this.$wire.newProject(); },
     };

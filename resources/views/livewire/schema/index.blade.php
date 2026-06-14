@@ -136,7 +136,7 @@
             </button>
 
             <template x-for="(p, i) in shown" :key="p.id">
-                <a class="proj-card" :href="p.url" wire:navigate>
+                <a class="proj-card" :href="p.url" wire:navigate @click="recordView(p.id)">
                     <div class="proj-thumb" x-html="miniThumb(p.colors, i)"></div>
                     <div class="proj-body">
                         <div class="proj-card-name" x-text="p.name"></div>
@@ -158,7 +158,12 @@
 
         <template x-if="projects.length && !shown.length">
             <div style="text-align: center; color: var(--faint); font-size: 13px; padding: 48px 0;">
-                No projects match “<span x-text="q"></span>”
+                <template x-if="tab === 'Recent' && !q">
+                    <span>No recently opened projects yet — open one to see it here</span>
+                </template>
+                <template x-if="tab !== 'Recent' || q">
+                    <span>No projects match “<span x-text="q"></span>”</span>
+                </template>
             </div>
         </template>
     </div>
