@@ -5,10 +5,10 @@
      @keydown.backspace.window="if (selectedRelId && !/^(INPUT|TEXTAREA|SELECT)$/.test($event.target.tagName) && !$event.target.isContentEditable) deleteRel(selectedRelId)">
     {{-- ───────── Navbar ───────── --}}
     <div class="nav">
-        <div class="nav-brand">
+        <a href="{{ route('home') }}" class="nav-brand" style="text-decoration: none; color: inherit;">
             <div class="nav-logo" x-html="icon('Database', { size: 16 })"></div>
             <span class="nav-wordmark">Schematic</span>
-        </div>
+        </a>
         <div class="nav-divider"></div>
         @unless($demo)
             <a href="{{ route('schemas.index') }}" wire:navigate class="proj-crumb btn btn-ghost" style="padding: 5px 8px; height: 30px;">Projects</a>
