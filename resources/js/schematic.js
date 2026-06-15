@@ -743,10 +743,31 @@ function schematicBuilder(initial) {
                 this.saving = false;
             }
         },
-        share() {
+        async share() {
             const url = window.location.href;
-            if (navigator.clipboard) navigator.clipboard.writeText(url).catch(() => {});
-            this.toast('Share link copied to clipboard');
+            try {
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(url);
+                } else {
+                    // Fallback for non-secure contexts (http LAN IP, Herd/Valet http domains)
+                    // where navigator.clipboard is undefined.
+                    const ta = document.createElement('textarea');
+                    ta.value = url;
+                    ta.style.position = 'fixed';
+                    ta.style.top = '-9999px';
+                    ta.style.opacity = '0';
+                    document.body.appendChild(ta);
+                    ta.focus();
+                    ta.select();
+                    const ok = document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    if (!ok) throw new Error('execCommand copy failed');
+                }
+                this.toast('Share link copied to clipboard');
+            } catch (err) {
+                this.toast('Copy failed — copy the URL from the address bar');
+                console.error(err);
+            }
         },
         _download(text, ext, mime) {
             const blob = new Blob([text], { type: mime });
