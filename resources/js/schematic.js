@@ -642,7 +642,7 @@ function schematicBuilder(initial) {
             const ids = sel.includes(id) ? [...sel] : [id];
             const starts = {};
             ids.forEach((tid) => { const t = this.tables.find((x) => x.id === tid); if (t) starts[tid] = { x: t.x, y: t.y }; });
-            this._drag = { mode: 'card', ids, startX: e.clientX, startY: e.clientY, starts, moved: false };
+            this._drag = { mode: 'card', id, ids, startX: e.clientX, startY: e.clientY, starts, moved: false };
             this.dragging = ids;
         },
         onPointerMove(e) {
@@ -670,6 +670,8 @@ function schematicBuilder(initial) {
                 this.linkDraft = null;
                 return;
             }
+            // A head press that never moved is a plain click → open the inspector.
+            if (this._drag && this._drag.mode === 'card' && !this._drag.moved) this.openEditor(this._drag.id);
             this.dragging = [];
             this._drag = null;
         },
