@@ -31,14 +31,14 @@
         <div class="nav-actions">
             <button class="btn btn-icon btn-ghost" title="Notifications" x-html="icon('Bell', { size: 16 })"></button>
             <button class="btn btn-icon btn-ghost" title="Share" @click="share()" x-html="icon('Share', { size: 16 })"></button>
-            <div style="position: relative;">
+            <div style="position: relative;" @click.outside="exportMenu = false">
                 <button class="btn" @click="exportMenu = !exportMenu" :class="{ 'is-open': exportMenu }">
                     <span x-html="icon('Download', { size: 15 })" style="display:flex"></span> Export
                     <span x-html="icon('ChevronDown', { size: 13 })" style="display:flex; color: var(--faint); margin-left: -2px;"></span>
                 </button>
                 <template x-if="exportMenu">
                     <div class="menu" style="position:absolute; right:0; top:38px; width:224px;"
-                         @click.outside="exportMenu = false" @keydown.escape.window="exportMenu = false">
+                         @keydown.escape.window="exportMenu = false">
                         <button class="menu-item" @click="exportSql(); exportMenu = false">
                             <span x-html="icon('Database', { size: 15 })" style="display:flex"></span><span style="flex:1">Export SQL</span>
                         </button>
@@ -65,11 +65,11 @@
         @if($demo)
             <a class="btn btn-ghost" href="{{ route('login') }}">Sign in</a>
         @else
-        <div style="position: relative;">
+        <div style="position: relative;" @click.outside="avatarMenu = false">
             <div class="avatar" @click="avatarMenu = !avatarMenu" title="{{ $user->name }}">{{ $user->initials() }}</div>
             <template x-if="avatarMenu">
                 <div class="menu" style="position: absolute; right: 0; top: 40px; width: 210px;"
-                     @click.outside="avatarMenu = false" @keydown.escape.window="avatarMenu = false">
+                     @keydown.escape.window="avatarMenu = false">
                     <div style="padding: 8px 10px 6px;">
                         <div style="font-size: 13px; font-weight: 600;">{{ $user->name }}</div>
                         <div style="font-size: 11.5px; color: var(--muted);">{{ $user->email }}</div>
@@ -473,12 +473,11 @@
     </template>
 
     {{-- ───────── Tweaks panel ───────── --}}
-    <div style="position: fixed; left: 18px; bottom: 18px; z-index: 60;" @keydown.escape.window="tweaksOpen = false">
+    <div style="position: fixed; left: 18px; bottom: 18px; z-index: 60;" @keydown.escape.window="tweaksOpen = false" @click.outside="tweaksOpen = false">
         <button class="btn btn-icon" style="box-shadow: var(--shadow-card); height: 38px; width: 38px;"
                 @click="tweaksOpen = !tweaksOpen" title="Appearance" x-html="icon('Palette', { size: 16 })"></button>
         <template x-if="tweaksOpen">
-            <div class="menu" style="position: absolute; left: 0; bottom: 46px; width: 246px; padding: 12px;"
-                 @click.outside="tweaksOpen = false">
+            <div class="menu" style="position: absolute; left: 0; bottom: 46px; width: 246px; padding: 12px;">
                 <div class="sb-title" style="margin-bottom: 8px;">Table colors</div>
                 <div class="field" style="margin-bottom: 12px;">
                     <span class="field-label">Palette</span>
