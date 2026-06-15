@@ -55,10 +55,6 @@
                     <span x-html="icon('Edit', { size: 15 })" style="display:flex"></span>
                     Edit profile
                 </a>
-                <a class="menu-item" href="{{ route('appearance.edit') }}" wire:navigate>
-                    <span x-html="icon('Palette', { size: 15 })" style="display:flex"></span>
-                    Appearance
-                </a>
                 <div class="menu-sep"></div>
                 <button type="button" class="menu-item danger" wire:click="logout">
                     <span x-html="icon('X', { size: 15 })" style="display:flex"></span>

@@ -1,34 +1,41 @@
-<section class="mt-10 space-y-6">
-    <div class="relative mb-5">
-        <flux:heading>{{ __('Delete account') }}</flux:heading>
-        <flux:subheading>{{ __('Delete your account and all of its resources') }}</flux:subheading>
+<section class="set-card set-card-danger" x-data="{ open: @js($errors->isNotEmpty()) }" @keydown.escape.window="open = false">
+    <div class="set-card-head">
+        <h2 class="set-card-title">Delete account</h2>
+        <p class="set-card-desc">Permanently delete your account and all of its schemas. This cannot be undone.</p>
     </div>
 
-    <flux:modal.trigger name="confirm-user-deletion">
-        <flux:button variant="danger" x-data="" x-on:click.prevent="$dispatch('open-modal', 'confirm-user-deletion')">
-            {{ __('Delete account') }}
-        </flux:button>
-    </flux:modal.trigger>
+    <div class="set-actions">
+        <button type="button" class="btn btn-danger" @click="open = true">
+            <span x-html="icon('Trash', { size: 15 })" style="display:flex"></span> Delete account
+        </button>
+    </div>
 
-    <flux:modal name="confirm-user-deletion" :show="$errors->isNotEmpty()" focusable class="max-w-lg">
-        <form method="POST" wire:submit="deleteUser" class="space-y-6">
-            <div>
-                <flux:heading size="lg">{{ __('Are you sure you want to delete your account?') }}</flux:heading>
+    <template x-teleport="body">
+        <div class="pf-scrim" x-show="open" x-transition.opacity style="display:none" @click="open = false">
+            <div class="pf-card" @click.stop x-show="open" x-transition.scale.origin.top>
+                <button type="button" class="pf-close" @click="open = false" aria-label="Close" x-html="icon('X', { size: 16 })"></button>
 
-                <flux:subheading>
-                    {{ __('Once your account is deleted, all of its resources and data will be permanently deleted. Please enter your password to confirm you would like to permanently delete your account.') }}
-                </flux:subheading>
+                <div style="margin-bottom: 18px;">
+                    <h3 style="font-size: 17px; font-weight: 660; letter-spacing: -.01em; margin: 0 0 6px;">Delete your account?</h3>
+                    <p style="font-size: 13px; line-height: 1.5; color: var(--muted); margin: 0;">
+                        Once deleted, all of your schemas and data are permanently removed. Enter your password to confirm.
+                    </p>
+                </div>
+
+                <form wire:submit="deleteUser" class="set-form">
+                    <div class="field">
+                        <span class="field-label">Password</span>
+                        <input class="input" type="password" wire:model="password" autocomplete="current-password"
+                               x-ref="pw" x-effect="open && $nextTick(() => $refs.pw.focus())" />
+                        @error('password') <span class="field-error">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div class="set-modal-actions">
+                        <button type="button" class="btn" @click="open = false">Cancel</button>
+                        <button type="submit" class="btn btn-danger-solid">Delete account</button>
+                    </div>
+                </form>
             </div>
-
-            <flux:input wire:model="password" :label="__('Password')" type="password" viewable />
-
-            <div class="flex justify-end space-x-2 rtl:space-x-reverse">
-                <flux:modal.close>
-                    <flux:button variant="filled">{{ __('Cancel') }}</flux:button>
-                </flux:modal.close>
-
-                <flux:button variant="danger" type="submit">{{ __('Delete account') }}</flux:button>
-            </div>
-        </form>
-    </flux:modal>
+        </div>
+    </template>
 </section>
