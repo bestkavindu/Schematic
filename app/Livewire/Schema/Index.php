@@ -42,6 +42,17 @@ class Index extends Component
     }
 
     /**
+     * Toggle the favorite flag on one of the current user's projects.
+     */
+    public function toggleFavorite(int $id): void
+    {
+        $project = Auth::user()->schemaProjects()->findOrFail($id);
+        $project->update(['favorite' => ! $project->favorite]);
+
+        unset($this->projects);
+    }
+
+    /**
      * Log the current user out and send them to the landing page.
      */
     public function logout(Logout $logout): void

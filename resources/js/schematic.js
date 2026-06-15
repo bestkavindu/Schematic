@@ -125,11 +125,13 @@ const ICON_PATHS = {
     Download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="m7 10 5 5 5-5M12 15V3" />',
     Save: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><path d="M17 21v-8H7v8M7 3v5h8" />',
     Bell: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />',
+    Star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26" />',
 };
 function icon(name, opts = {}) {
     const size = opts.size || 16;
     const color = opts.color ? ` style="color:${opts.color}"` : '';
-    return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" `
+    const fill = opts.fill ? 'currentColor' : 'none';
+    return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="${fill}" stroke="currentColor" `
         + `stroke-width="2" stroke-linecap="round" stroke-linejoin="round"${color}>${ICON_PATHS[name] || ''}</svg>`;
 }
 
@@ -186,6 +188,7 @@ function schematicBuilder(initial) {
         cardMenu: null,
         sbMenu: null,
         avatarMenu: false,
+        exportMenu: false,
 
         tweaks: { tablePalette: 'Vivid', accent: 'Indigo', radius: 10, showGrid: true },
         tweaksOpen: false,
@@ -847,12 +850,16 @@ function schematicDashboard(projects) {
         projects: projects || [],
         tab: 'All',
         q: '',
-        tabs: ['All', 'Recent', 'Shared with me', 'Archived'],
+        tabs: ['All', 'Recent', 'Favorites', 'Shared with me', 'Archived'],
         recents: {},
         miniThumb,
         icon,
         init() {
             this.recents = loadRecents();
+        },
+        async toggleFav(p) {
+            p.favorite = !p.favorite;
+            await this.$wire.toggleFavorite(p.id);
         },
         recordView(id) {
             const recents = loadRecents();
@@ -864,6 +871,15 @@ function schematicDashboard(projects) {
             this.recents = Object.fromEntries(trimmed);
             localStorage.setItem(RECENTS_KEY, JSON.stringify(this.recents));
         },
+        tabIcon(t) {
+            return ({ Recent: 'Clock', Favorites: 'Star' })[t] || null;
+        },
+        tabCount(t) {
+            if (t === 'Recent') return this.projects.filter((p) => this.recents[p.id]).length;
+            if (t === 'Favorites') return this.projects.filter((p) => p.favorite).length;
+            if (t === 'All') return this.projects.length;
+            return null; // Shared / Archived: not built yet, no count
+        },
         get shown() {
             const q = this.q.toLowerCase();
             const matches = this.projects.filter((p) => p.name.toLowerCase().includes(q));
@@ -871,6 +887,9 @@ function schematicDashboard(projects) {
                 return matches
                     .filter((p) => this.recents[p.id])
                     .sort((a, b) => this.recents[b.id] - this.recents[a.id]);
+            }
+            if (this.tab === 'Favorites') {
+                return matches.filter((p) => p.favorite);
             }
             return matches;
         },

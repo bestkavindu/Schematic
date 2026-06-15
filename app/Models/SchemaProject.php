@@ -12,6 +12,7 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property int $user_id
  * @property string $name
+ * @property bool $favorite
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Collection<int, SchemaTable> $tables
@@ -19,7 +20,10 @@ use Illuminate\Support\Carbon;
 class SchemaProject extends Model
 {
     /** @var list<string> */
-    protected $fillable = ['user_id', 'name'];
+    protected $fillable = ['user_id', 'name', 'favorite'];
+
+    /** @var array<string, string> */
+    protected $casts = ['favorite' => 'boolean'];
 
     /**
      * @return BelongsTo<User, $this>

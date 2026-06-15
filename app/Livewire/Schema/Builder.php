@@ -163,6 +163,14 @@ class Builder extends Component
         unset($this->schema);
     }
 
+    /**
+     * Toggle the project's favorite flag.
+     */
+    public function toggleFavorite(): void
+    {
+        $this->project->update(['favorite' => ! $this->project->favorite]);
+    }
+
     public function render(): View
     {
         $view = view('livewire.schema.builder');

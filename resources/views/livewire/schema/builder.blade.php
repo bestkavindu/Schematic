@@ -18,18 +18,38 @@
         @endunless
         <input class="proj-name" x-model="projectName" spellcheck="false" @keydown.enter="$event.target.blur()" />
 
+        @unless($demo)
+            <button class="btn btn-icon btn-ghost fav-btn {{ $project->favorite ? 'is-fav' : '' }}"
+                    wire:click="toggleFavorite"
+                    title="{{ $project->favorite ? 'Remove from favorites' : 'Add to favorites' }}"
+                    aria-pressed="{{ $project->favorite ? 'true' : 'false' }}"
+                    x-html="icon('Star', { size: 15, fill: @js($project->favorite) })"></button>
+        @endunless
+
         <div class="nav-spacer"></div>
 
-        <button class="btn btn-icon btn-ghost" title="Notifications" x-html="icon('Bell', { size: 16 })"></button>
-        <button class="btn" @click="share()">
-            <span x-html="icon('Share', { size: 15 })" style="display:flex"></span> Share
-        </button>
-        <button class="btn" @click="exportSql()">
-            <span x-html="icon('Download', { size: 15 })" style="display:flex"></span> Export SQL
-        </button>
-        <button class="btn" @click="exportMigration()" title="Export a Laravel migration">
-            <span x-html="icon('Download', { size: 15 })" style="display:flex"></span> Export migration
-        </button>
+        <div class="nav-actions">
+            <button class="btn btn-icon btn-ghost" title="Notifications" x-html="icon('Bell', { size: 16 })"></button>
+            <button class="btn btn-icon btn-ghost" title="Share" @click="share()" x-html="icon('Share', { size: 16 })"></button>
+            <div style="position: relative;">
+                <button class="btn" @click="exportMenu = !exportMenu" :class="{ 'is-open': exportMenu }">
+                    <span x-html="icon('Download', { size: 15 })" style="display:flex"></span> Export
+                    <span x-html="icon('ChevronDown', { size: 13 })" style="display:flex; color: var(--faint); margin-left: -2px;"></span>
+                </button>
+                <template x-if="exportMenu">
+                    <div class="menu" style="position:absolute; right:0; top:38px; width:224px;"
+                         @click.outside="exportMenu = false" @keydown.escape.window="exportMenu = false">
+                        <button class="menu-item" @click="exportSql(); exportMenu = false">
+                            <span x-html="icon('Database', { size: 15 })" style="display:flex"></span><span style="flex:1">Export SQL</span>
+                        </button>
+                        <button class="menu-item" @click="exportMigration(); exportMenu = false">
+                            <span x-html="icon('Layout', { size: 15 })" style="display:flex"></span><span style="flex:1">Laravel migration</span>
+                        </button>
+                    </div>
+                </template>
+            </div>
+        </div>
+        <div class="nav-divider"></div>
         @unless($demo)
             <button class="btn btn-primary" @click="save()" :disabled="saving">
                 <span x-html="icon('Save', { size: 15 })" style="display:flex"></span>

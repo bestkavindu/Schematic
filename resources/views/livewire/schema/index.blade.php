@@ -5,6 +5,7 @@
         'tables' => $p->tables_count,
         'edited' => optional($p->updated_at)->diffForHumans() ?? 'just now',
         'colors' => $p->tables->pluck('color')->unique()->values()->take(4)->all() ?: ['blue'],
+        'favorite' => (bool) $p->favorite,
         'url' => route('schemas.builder', $p),
     ])->values();
 
@@ -116,15 +117,25 @@
                 <h1 class="dash-h1">Your schemas</h1>
                 <p class="dash-sub" x-text="projects.length + ' project' + (projects.length === 1 ? '' : 's') + ' · Laravel workspace'"></p>
             </div>
-            <div class="search" style="width: 280px;">
+            <div class="search search-dash" @keydown.escape.stop="q = ''">
                 <span x-html="icon('Search', { size: 15 })" style="display:flex"></span>
                 <input placeholder="Search projects" x-model="q" />
+                <button type="button" class="search-clear" x-show="q" @click="q = ''" aria-label="Clear search"
+                        x-html="icon('X', { size: 13 })"></button>
             </div>
         </div>
 
         <div class="dash-tabs">
             <template x-for="t in tabs" :key="t">
-                <button class="dash-tab" :class="{ active: tab === t }" @click="tab = t" x-text="t"></button>
+                <button class="dash-tab" :class="{ active: tab === t }" @click="tab = t">
+                    <template x-if="tabIcon(t)">
+                        <span class="dash-tab-ic" x-html="icon(tabIcon(t), { size: 13 })"></span>
+                    </template>
+                    <span x-text="t"></span>
+                    <template x-if="tabCount(t) !== null">
+                        <span class="dash-tab-count" x-text="tabCount(t)"></span>
+                    </template>
+                </button>
             </template>
         </div>
 
@@ -137,13 +148,20 @@
 
             <template x-for="(p, i) in shown" :key="p.id">
                 <a class="proj-card" :href="p.url" wire:navigate @click="recordView(p.id)">
+                    <div class="proj-actions">
+                        <button type="button" class="fav-star" :class="{ 'is-fav': p.favorite }"
+                                @click.prevent.stop="toggleFav(p)"
+                                :title="p.favorite ? 'Remove from favorites' : 'Add to favorites'"
+                                :aria-pressed="p.favorite"
+                                x-html="icon('Star', { size: 15, fill: p.favorite })"></button>
+                    </div>
                     <div class="proj-thumb" x-html="miniThumb(p.colors, i)"></div>
                     <div class="proj-body">
                         <div class="proj-card-name" x-text="p.name"></div>
                         <div class="proj-foot">
                             <span style="display: inline-flex; align-items: center; gap: 4px;">
                                 <span x-html="icon('Database', { size: 12 })" style="display:flex"></span>
-                                <span x-text="p.tables + ' tables'"></span>
+                                <span><span class="proj-foot-num" x-text="p.tables"></span> tables</span>
                             </span>
                             <span class="dot"></span>
                             <span style="display: inline-flex; align-items: center; gap: 4px;">
@@ -157,12 +175,33 @@
         </div>
 
         <template x-if="projects.length && !shown.length">
-            <div style="text-align: center; color: var(--faint); font-size: 13px; padding: 48px 0;">
+            <div>
                 <template x-if="tab === 'Recent' && !q">
-                    <span>No recently opened projects yet — open one to see it here</span>
+                    <div class="dash-empty">
+                        <div class="dash-empty-ic" x-html="icon('Clock', { size: 20 })"></div>
+                        <div class="dash-empty-h">Nothing opened yet</div>
+                        <div class="dash-empty-sub">Projects you open will show up here so you can jump back in fast.</div>
+                        <button type="button" class="dash-empty-cta" @click="tab = 'All'">
+                            <span x-html="icon('Database', { size: 14 })" style="display:flex"></span> Browse all projects
+                        </button>
+                    </div>
                 </template>
-                <template x-if="tab !== 'Recent' || q">
-                    <span>No projects match “<span x-text="q"></span>”</span>
+                <template x-if="tab === 'Favorites' && !q">
+                    <div class="dash-empty">
+                        <div class="dash-empty-ic is-fav" x-html="icon('Star', { size: 20 })"></div>
+                        <div class="dash-empty-h">No favorites yet</div>
+                        <div class="dash-empty-sub">Hover any project and tap the star to pin it here for quick access.</div>
+                    </div>
+                </template>
+                <template x-if="(tab !== 'Recent' && tab !== 'Favorites') || q">
+                    <div class="dash-empty">
+                        <div class="dash-empty-ic" x-html="icon('Search', { size: 20 })"></div>
+                        <div class="dash-empty-h">No matching projects</div>
+                        <div class="dash-empty-sub">Nothing matches <span style="color:var(--ink-2);font-weight:560">“<span x-text="q"></span>”</span>. Try a different term.</div>
+                        <button type="button" class="dash-empty-cta" x-show="q" @click="q = ''">
+                            <span x-html="icon('X', { size: 14 })" style="display:flex"></span> Clear search
+                        </button>
+                    </div>
                 </template>
             </div>
         </template>
