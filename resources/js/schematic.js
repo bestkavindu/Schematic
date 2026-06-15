@@ -672,6 +672,8 @@ function schematicBuilder(initial) {
             }
             // A head press that never moved is a plain click → open the inspector.
             if (this._drag && this._drag.mode === 'card' && !this._drag.moved) this.openEditor(this._drag.id);
+            // A click on empty canvas (no pan drag) closes the inspector.
+            if (this._drag && this._drag.mode === 'pan' && !this._drag.moved) this.editorId = null;
             this.dragging = [];
             this._drag = null;
         },
