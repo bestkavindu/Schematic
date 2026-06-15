@@ -125,6 +125,7 @@ const ICON_PATHS = {
     Clock: '<circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" />',
     Share: '<circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4" />',
     Download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="m7 10 5 5 5-5M12 15V3" />',
+    Upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="m17 8-5-5-5 5M12 3v12" />',
     Save: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><path d="M17 21v-8H7v8M7 3v5h8" />',
     Bell: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />',
     Star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26" />',
@@ -865,7 +866,185 @@ function schematicBuilder(initial) {
             this._download(text, '_migration.php', 'text/plain');
             this.toast('Exported Laravel migration');
         },
+
+        // ----- import -----
+        // Open the hidden file picker (wired in the blade markup).
+        triggerImport() {
+            this.exportMenu = false;
+            const el = this.$refs.importFile;
+            if (el) { el.value = ''; el.click(); }
+        },
+        // Read the chosen .sql file and hand its text to the parser.
+        importFile(e) {
+            const file = e.target.files && e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => this.importSql(reader.result || '');
+            reader.onerror = () => this.toast('Could not read file');
+            reader.readAsText(file);
+        },
+        // Parse CREATE TABLE statements and add them to the canvas.
+        importSql(text) {
+            let parsed;
+            try { parsed = parseSqlSchema(text); }
+            catch (err) { this.toast('Import failed: ' + err.message); return; }
+            if (!parsed.length) { this.toast('No CREATE TABLE statements found'); return; }
+
+            // Map imported table names → fresh client ids so FKs can be re-linked.
+            const nameToId = {};
+            parsed.forEach((p) => { nameToId[p.name.toLowerCase()] = uid('t'); });
+
+            // Lay the new tables out in a grid in free space below existing ones.
+            const baseY = this.tables.length
+                ? Math.max(...this.tables.map((t) => t.y + cardHeight(t))) + 60 : 80;
+            const GAP_X = GEO.CARD_W + 60, GAP_Y = 280, PER_ROW = 3;
+
+            const imported = parsed.map((p, i) => ({
+                id: nameToId[p.name.toLowerCase()],
+                name: p.name,
+                color: COLOR_KEYS[i % COLOR_KEYS.length],
+                x: 80 + (i % PER_ROW) * GAP_X,
+                y: baseY + Math.floor(i / PER_ROW) * GAP_Y,
+                indexes: [],
+                columns: p.columns.map((c) => {
+                    const col = blankColumn(c.name, c.type);
+                    col.nullable = c.nullable; col.pk = c.pk;
+                    col.unique = c.unique; col.default = c.default || '';
+                    if (c.fk && nameToId[c.fk.table.toLowerCase()]) {
+                        col.fk = {
+                            table: nameToId[c.fk.table.toLowerCase()],
+                            column: c.fk.column || 'id',
+                            type: '1:N',
+                            onDelete: c.fk.onDelete || (c.nullable ? 'set null' : 'cascade'),
+                            onUpdate: c.fk.onUpdate || 'no action',
+                        };
+                    }
+                    return col;
+                }),
+            }));
+
+            this.tables = [...this.tables, ...imported];
+            this.$nextTick(() => this.fitToScreen());
+            this.toast(`Imported ${imported.length} table${imported.length === 1 ? '' : 's'}`);
+        },
     };
+}
+
+// ---------- SQL import parser ----------
+// Best-effort reverse of exportSql(): turn CREATE TABLE statements into table objects.
+const SQL_TO_LARAVEL = [
+    [/^BIGINT\s+UNSIGNED/, 'unsignedBigInteger'],
+    [/^BIGINT/, 'bigInteger'],
+    [/^TINYINT\s*\(\s*1\s*\)/, 'boolean'],
+    [/^(TINYINT|SMALLINT|MEDIUMINT|INT|INTEGER)/, 'integer'],
+    [/^(VARCHAR|CHAR\s*\(\s*(?!36\b)\d)/, 'string'],
+    [/^CHAR\s*\(\s*36/, 'uuid'],
+    [/^(TEXT|LONGTEXT|MEDIUMTEXT|TINYTEXT)/, 'text'],
+    [/^DATETIME/, 'datetime'],
+    [/^TIMESTAMP/, 'timestamp'],
+    [/^DATE/, 'date'],
+    [/^(JSON|JSONB)/, 'json'],
+    [/^(DECIMAL|NUMERIC)/, 'decimal'],
+    [/^(DOUBLE|FLOAT|REAL)/, 'float'],
+    [/^UUID/, 'uuid'],
+    [/^BOOL(EAN)?/, 'boolean'],
+];
+function sqlTypeToLaravel(raw) {
+    const t = raw.trim().toUpperCase();
+    for (const [re, name] of SQL_TO_LARAVEL) if (re.test(t)) return name;
+    return 'string';
+}
+// Split a parenthesised body on top-level commas (ignore commas inside nested parens).
+function splitTopLevel(body) {
+    const out = [];
+    let depth = 0, cur = '';
+    for (const ch of body) {
+        if (ch === '(') depth++;
+        else if (ch === ')') depth--;
+        if (ch === ',' && depth === 0) { out.push(cur); cur = ''; }
+        else cur += ch;
+    }
+    if (cur.trim()) out.push(cur);
+    return out;
+}
+function unquoteIdent(s) { return s.trim().replace(/^[`"'\[]+|[`"'\]]+$/g, ''); }
+function parseSqlSchema(sql) {
+    // Strip line and block comments.
+    const clean = sql.replace(/--[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+    const tables = [];
+    const re = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([`"'\[]?[\w.]+[`"'\]]?)\s*\(/gi;
+    let m;
+    while ((m = re.exec(clean)) !== null) {
+        // Find the matching close paren for this CREATE TABLE.
+        let depth = 1, i = re.lastIndex;
+        for (; i < clean.length && depth > 0; i++) {
+            if (clean[i] === '(') depth++;
+            else if (clean[i] === ')') depth--;
+        }
+        const body = clean.slice(re.lastIndex, i - 1);
+        const name = unquoteIdent(m[1]).split('.').pop();
+        const cols = [];
+        const byName = {};
+        const pkCols = [];
+
+        for (const rawPart of splitTopLevel(body)) {
+            const part = rawPart.trim();
+            if (!part) continue;
+            const upper = part.toUpperCase();
+
+            if (/^PRIMARY\s+KEY/.test(upper)) {
+                const inner = part.slice(part.indexOf('(') + 1, part.lastIndexOf(')'));
+                inner.split(',').forEach((c) => pkCols.push(unquoteIdent(c).toLowerCase()));
+                continue;
+            }
+            if (/^(FOREIGN\s+KEY|CONSTRAINT)/.test(upper)) {
+                const fkM = part.match(/FOREIGN\s+KEY\s*\(([^)]+)\)\s*REFERENCES\s+([`"'\[]?[\w.]+[`"'\]]?)\s*\(([^)]+)\)/i);
+                if (fkM) {
+                    const localCol = unquoteIdent(fkM[1].split(',')[0]).toLowerCase();
+                    const refTable = unquoteIdent(fkM[2]).split('.').pop();
+                    const refCol = unquoteIdent(fkM[3].split(',')[0]);
+                    const del = (part.match(/ON\s+DELETE\s+(CASCADE|RESTRICT|SET\s+NULL|NO\s+ACTION)/i) || [])[1];
+                    const upd = (part.match(/ON\s+UPDATE\s+(CASCADE|RESTRICT|SET\s+NULL|NO\s+ACTION)/i) || [])[1];
+                    if (byName[localCol]) {
+                        byName[localCol].fk = {
+                            table: refTable, column: refCol,
+                            onDelete: del ? del.toLowerCase().replace(/\s+/g, ' ') : null,
+                            onUpdate: upd ? upd.toLowerCase().replace(/\s+/g, ' ') : null,
+                        };
+                    }
+                }
+                continue;
+            }
+            if (/^(UNIQUE|KEY|INDEX|CHECK|PRIMARY)/.test(upper)) continue; // table-level keys we don't map
+
+            // Column definition: `name` TYPE modifiers...
+            const nameM = part.match(/^([`"'\[]?[\w]+[`"'\]]?)\s+(.+)$/s);
+            if (!nameM) continue;
+            const colName = unquoteIdent(nameM[1]);
+            const rest = nameM[2];
+            const restU = rest.toUpperCase();
+            let type = sqlTypeToLaravel(rest);
+            if (/AUTO_INCREMENT/.test(restU) || /\bSERIAL\b/.test(restU)) type = 'id';
+            const defM = rest.match(/DEFAULT\s+('[^']*'|"[^"]*"|[\w.()-]+)/i);
+            const col = {
+                name: colName,
+                type,
+                nullable: !/NOT\s+NULL/.test(restU),
+                pk: /PRIMARY\s+KEY/.test(restU),
+                unique: /\bUNIQUE\b/.test(restU),
+                default: defM ? defM[1].replace(/^['"]|['"]$/g, '') : '',
+                fk: null,
+            };
+            if (type === 'id') { col.pk = true; col.nullable = false; }
+            cols.push(col);
+            byName[colName.toLowerCase()] = col;
+        }
+        // Apply table-level PRIMARY KEY (...) to the named columns.
+        pkCols.forEach((pc) => { if (byName[pc]) { byName[pc].pk = true; byName[pc].nullable = false; } });
+
+        if (cols.length) tables.push({ name, columns: cols });
+    }
+    return tables;
 }
 
 // ---------- dashboard component ----------

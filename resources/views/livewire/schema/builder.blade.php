@@ -45,8 +45,13 @@
                         <button class="menu-item" @click="exportMigration(); exportMenu = false">
                             <span x-html="icon('Layout', { size: 15 })" style="display:flex"></span><span style="flex:1">Laravel migration</span>
                         </button>
+                        <div class="menu-sep"></div>
+                        <button class="menu-item" @click="triggerImport()">
+                            <span x-html="icon('Upload', { size: 15 })" style="display:flex"></span><span style="flex:1">Import SQL</span>
+                        </button>
                     </div>
                 </template>
+                <input type="file" accept=".sql,text/sql,text/plain" x-ref="importFile" @change="importFile($event)" style="display:none" />
             </div>
         </div>
         <div class="nav-divider"></div>
