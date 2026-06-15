@@ -1,327 +1,242 @@
-<section class="w-full">
-    @include('partials.settings-heading')
+@php
+    $u = auth()->user();
+    $initials = collect(explode(' ', trim($u->name)))
+        ->filter()
+        ->take(2)
+        ->map(fn ($w) => mb_strtoupper(mb_substr($w, 0, 1)))
+        ->implode('') ?: mb_strtoupper(mb_substr($u->email, 0, 1));
+@endphp
 
-    <flux:heading class="sr-only">{{ __('Security settings') }}</flux:heading>
+<div class="dash screen-fade" x-data="{ toast: '', _t: null, ping(text) { this.toast = text; clearTimeout(this._t); this._t = setTimeout(() => this.toast = '', 2800); } }"
+     @settings-saved.window="ping($event.detail.text)">
 
-    <x-settings.layout :heading="__('Update password')" :subheading="__('Ensure your account is using a long, random password to stay secure')">
-        <form method="POST" wire:submit="updatePassword" class="mt-6 space-y-6">
-            <flux:input
-                wire:model="current_password"
-                :label="__('Current password')"
-                type="password"
-                required
-                autocomplete="current-password"
-                viewable
-            />
-            <flux:input
-                wire:model="password"
-                :label="__('New password')"
-                type="password"
-                required
-                autocomplete="new-password"
-                passwordrules="{{ \Illuminate\Validation\Rules\Password::defaults()->toPasswordRulesString() }}"
-                viewable
-            />
-            <flux:input
-                wire:model="password_confirmation"
-                :label="__('Confirm password')"
-                type="password"
-                required
-                autocomplete="new-password"
-                passwordrules="{{ \Illuminate\Validation\Rules\Password::defaults()->toPasswordRulesString() }}"
-                viewable
-            />
+    {{-- ───────── top bar ───────── --}}
+    <header class="dash-topbar">
+        <a class="topbar-brand" href="{{ route('schemas.index') }}" wire:navigate>
+            <span class="topbar-logo" x-html="icon('Database', { size: 17 })"></span>
+            Schematic
+        </a>
+        <div class="topbar-spacer"></div>
+        <a class="btn btn-ghost" href="{{ route('schemas.index') }}" wire:navigate>
+            <span x-html="icon('ChevronRight', { size: 14 })" style="display:flex; transform: rotate(180deg);"></span>
+            Back to schemas
+        </a>
+        <span class="avatar" title="{{ $u->name }}">{{ $initials }}</span>
+    </header>
 
-            <div class="flex items-center gap-4">
-                <flux:button variant="primary" type="submit" data-test="update-password-button">{{ __('Save') }}</flux:button>
-            </div>
-        </form>
+    <div class="set-main">
+        <div class="set-head">
+            <h1 class="set-h1">Settings</h1>
+            <p class="set-sub">Manage your profile and account</p>
+        </div>
 
-        @if ($canManageTwoFactor)
-            <section class="mt-12">
-                <flux:heading>{{ __('Two-factor authentication') }}</flux:heading>
-                <flux:subheading>{{ __('Manage your two-factor authentication settings') }}</flux:subheading>
+        <div class="set-grid">
+            {{-- ── side nav ── --}}
+            <nav class="set-nav" aria-label="Settings">
+                <a class="set-nav-item" href="{{ route('profile.edit') }}" wire:navigate>
+                    <span x-html="icon('Edit', { size: 15 })" style="display:flex"></span> Profile
+                </a>
+                <a class="set-nav-item active" href="{{ route('security.edit') }}" wire:navigate>
+                    <span x-html="icon('Key', { size: 15 })" style="display:flex"></span> Security
+                </a>
+            </nav>
 
-                <div class="flex flex-col w-full mx-auto space-y-6 text-sm" wire:cloak>
-                    @if ($twoFactorEnabled)
-                        <div class="space-y-4">
-                            <flux:text>
-                                {{ __('You will be prompted for a secure, random pin during login, which you can retrieve from the TOTP-supported application on your phone.') }}
-                            </flux:text>
+            {{-- ── content ── --}}
+            <div class="set-content">
 
-                            <div class="flex justify-start">
-                                <flux:button
-                                    variant="danger"
-                                    wire:click="disable"
-                                >
-                                    {{ __('Disable 2FA') }}
-                                </flux:button>
-                            </div>
-
-                            <livewire:settings.two-factor.recovery-codes :$requiresConfirmation />
-                        </div>
-                    @else
-                        <div class="space-y-4">
-                            <flux:text variant="subtle">
-                                {{ __('When you enable two-factor authentication, you will be prompted for a secure pin during login. This pin can be retrieved from a TOTP-supported application on your phone.') }}
-                            </flux:text>
-
-                            <flux:button
-                                variant="primary"
-                                wire:click="enable"
-                            >
-                                {{ __('Enable 2FA') }}
-                            </flux:button>
-                        </div>
-                    @endif
-                </div>
-            </section>
-        @endif
-
-        @if ($canManageTwoFactor)
-            <flux:modal
-                name="two-factor-setup-modal"
-                class="max-w-md md:min-w-md"
-                @close="closeModal"
-                wire:model="showModal"
-            >
-                <div class="space-y-6">
-                    <div class="flex flex-col items-center space-y-4">
-                        <div class="p-0.5 w-auto rounded-full border border-stone-100 dark:border-stone-600 bg-white dark:bg-stone-800 shadow-sm">
-                            <div class="p-2.5 rounded-full border border-stone-200 dark:border-stone-600 overflow-hidden bg-stone-100 dark:bg-stone-200 relative">
-                                <div class="flex items-stretch absolute inset-0 w-full h-full divide-x [&>div]:flex-1 divide-stone-200 dark:divide-stone-300 justify-around opacity-50">
-                                    @for ($i = 1; $i <= 5; $i++)
-                                        <div></div>
-                                    @endfor
-                                </div>
-
-                                <div class="flex flex-col items-stretch absolute w-full h-full divide-y [&>div]:flex-1 inset-0 divide-stone-200 dark:divide-stone-300 justify-around opacity-50">
-                                    @for ($i = 1; $i <= 5; $i++)
-                                        <div></div>
-                                    @endfor
-                                </div>
-
-                                <flux:icon.qr-code class="relative z-20 dark:text-accent-foreground"/>
-                            </div>
-                        </div>
-
-                        <div class="space-y-2 text-center">
-                            <flux:heading size="lg">{{ $this->modalConfig['title'] }}</flux:heading>
-                            <flux:text>{{ $this->modalConfig['description'] }}</flux:text>
-                        </div>
+                {{-- ===== Password ===== --}}
+                <section class="set-card">
+                    <div class="set-card-head">
+                        <h2 class="set-card-title">Update password</h2>
+                        <p class="set-card-desc">Use a long, random password to keep your account secure.</p>
                     </div>
 
-                    @if ($showVerificationStep)
-                        <div class="space-y-6">
-                            <div
-                                class="flex flex-col items-center space-y-3 justify-center"
-                                x-data
-                                x-init="$nextTick(() => $el.querySelector('input')?.focus())"
-                            >
-                                <flux:otp
-                                    name="code"
-                                    wire:model="code"
-                                    length="6"
-                                    label="OTP Code"
-                                    label:sr-only
-                                    class="mx-auto"
-                                />
-                            </div>
-
-                            <div class="flex items-center space-x-3">
-                                <flux:button
-                                    variant="outline"
-                                    class="flex-1"
-                                    wire:click="resetVerification"
-                                >
-                                    {{ __('Back') }}
-                                </flux:button>
-
-                                <flux:button
-                                    variant="primary"
-                                    class="flex-1"
-                                    wire:click="confirmTwoFactor"
-                                    x-bind:disabled="$wire.code.length < 6"
-                                >
-                                    {{ __('Confirm') }}
-                                </flux:button>
-                            </div>
+                    <form method="POST" wire:submit="updatePassword" class="set-form">
+                        <div class="field">
+                            <span class="field-label">Current password</span>
+                            <input class="input" type="password" wire:model="current_password" required autocomplete="current-password" />
+                            @error('current_password') <span class="field-error">{{ $message }}</span> @enderror
                         </div>
-                    @else
-                        @error('setupData')
-                            <flux:callout variant="danger" icon="x-circle" heading="{{ $message }}"/>
-                        @enderror
+                        <div class="field">
+                            <span class="field-label">New password</span>
+                            <input class="input" type="password" wire:model="password" required autocomplete="new-password" />
+                            @error('password') <span class="field-error">{{ $message }}</span> @enderror
+                        </div>
+                        <div class="field">
+                            <span class="field-label">Confirm password</span>
+                            <input class="input" type="password" wire:model="password_confirmation" required autocomplete="new-password" />
+                        </div>
+                        <div class="set-actions">
+                            <button type="submit" class="btn btn-primary">
+                                <span x-html="icon('Save', { size: 15 })" style="display:flex"></span> Save
+                            </button>
+                        </div>
+                    </form>
+                </section>
 
-                        <div class="flex justify-center">
-                            <div class="relative w-64 overflow-hidden border rounded-lg border-stone-200 dark:border-stone-700 aspect-square">
-                                @empty($qrCodeSvg)
-                                    <div class="absolute inset-0 flex items-center justify-center bg-white dark:bg-stone-700 animate-pulse">
-                                        <flux:icon.loading/>
-                                    </div>
+                {{-- ===== Two-factor ===== --}}
+                @if ($canManageTwoFactor)
+                    <section class="set-card" wire:cloak>
+                        <div class="set-card-head">
+                            <h2 class="set-card-title">
+                                Two-factor authentication
+                                @if ($twoFactorEnabled)
+                                    <span class="set-pill ok">On</span>
                                 @else
-                                <div x-data class="flex items-center justify-center h-full p-4">
-                                    <div
-                                        class="bg-white p-3 rounded"
-                                        :style="($flux.appearance === 'dark' || ($flux.appearance === 'system' && $flux.dark)) ? 'filter: invert(1) brightness(1.5)' : ''"
-                                    >
-                                            {!! $qrCodeSvg !!}
-                                        </div>
-                                    </div>
-                                @endempty
-                            </div>
+                                    <span class="set-pill">Off</span>
+                                @endif
+                            </h2>
+                            <p class="set-card-desc">Add an extra layer of security using a TOTP authenticator app.</p>
                         </div>
 
-                        <div>
-                            <flux:button
-                                :disabled="$errors->has('setupData')"
-                                variant="primary"
-                                class="w-full"
-                                wire:click="showVerificationIfNecessary"
-                            >
-                                {{ $this->modalConfig['buttonText'] }}
-                            </flux:button>
+                        @if ($twoFactorEnabled)
+                            <div class="set-actions">
+                                <button type="button" class="btn btn-danger" wire:click="disable">Disable 2FA</button>
+                            </div>
+                            <div style="margin-top: 18px;">
+                                <livewire:settings.two-factor.recovery-codes :$requiresConfirmation />
+                            </div>
+                        @else
+                            <div class="set-actions">
+                                <button type="button" class="btn btn-primary" wire:click="enable">
+                                    <span x-html="icon('Key', { size: 15 })" style="display:flex"></span> Enable 2FA
+                                </button>
+                            </div>
+                        @endif
+                    </section>
+                @endif
+
+                {{-- ===== Passkeys ===== --}}
+                @if ($canManagePasskeys)
+                    <section class="set-card" wire:cloak>
+                        <div class="set-card-head">
+                            <h2 class="set-card-title">Passkeys</h2>
+                            <p class="set-card-desc">Sign in without a password using a passkey on your device.</p>
                         </div>
 
-                        <div class="space-y-4">
-                            <div class="relative flex items-center justify-center w-full">
-                                <div class="absolute inset-0 w-full h-px top-1/2 bg-stone-200 dark:bg-stone-600"></div>
-                                <span class="relative px-2 text-sm bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-400">
-                                    {{ __('or, enter the code manually') }}
-                                </span>
-                            </div>
-
-                            <div
-                                class="flex items-center space-x-2"
-                                x-data="{
-                                    copied: false,
-                                    async copy() {
-                                        try {
-                                            await navigator.clipboard.writeText('{{ $manualSetupKey }}');
-                                            this.copied = true;
-                                            setTimeout(() => this.copied = false, 1500);
-                                        } catch (e) {
-                                            console.warn('Could not copy to clipboard');
-                                        }
-                                    }
-                                }"
-                            >
-                                <div class="flex items-stretch w-full border rounded-xl dark:border-stone-700">
-                                    @empty($manualSetupKey)
-                                        <div class="flex items-center justify-center w-full p-3 bg-stone-100 dark:bg-stone-700">
-                                            <flux:icon.loading variant="mini"/>
-                                        </div>
-                                    @else
-                                        <input
-                                            type="text"
-                                            readonly
-                                            value="{{ $manualSetupKey }}"
-                                            class="w-full p-3 bg-transparent outline-none text-stone-900 dark:text-stone-100"
-                                        />
-
-                                        <button
-                                            @click="copy()"
-                                            class="px-3 transition-colors border-l cursor-pointer border-stone-200 dark:border-stone-600"
-                                        >
-                                            <flux:icon.document-duplicate x-show="!copied" variant="outline"></flux:icon>
-                                            <flux:icon.check
-                                                x-show="copied"
-                                                variant="solid"
-                                                class="text-green-500"
-                                            ></flux:icon>
-                                        </button>
-                                    @endempty
-                                </div>
-                            </div>
-                        </div>
-                    @endif
-                </div>
-            </flux:modal>
-        @endif
-
-        @if ($canManagePasskeys)
-            <section class="mt-12">
-                <flux:heading>{{ __('Passkeys') }}</flux:heading>
-                <flux:subheading>{{ __('Manage your passkeys for passwordless sign-in') }}</flux:subheading>
-
-                <div class="mt-6 flex flex-col w-full mx-auto space-y-6 text-sm" wire:cloak>
-                    <div class="border rounded-lg border-zinc-200 dark:border-zinc-700 overflow-hidden">
-                        @forelse ($passkeys as $passkey)
-                            <div class="flex items-center justify-between p-4 {{ ! $loop->last ? 'border-b border-zinc-200 dark:border-zinc-700' : '' }}">
-                                <div class="flex items-center gap-4">
-                                    <div class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800">
-                                        <flux:icon.key class="size-5 text-zinc-500 dark:text-zinc-400" />
-                                    </div>
-                                    <div class="space-y-1">
-                                        <div class="flex items-center gap-2.5">
-                                            <p class="font-medium tracking-tight">{{ $passkey['name'] }}</p>
+                        <div class="pk-list">
+                            @forelse ($passkeys as $passkey)
+                                <div class="pk-row">
+                                    <span class="pk-ic" x-html="icon('Key', { size: 17 })"></span>
+                                    <div class="pk-meta">
+                                        <div class="pk-name-row">
+                                            <span class="pk-name">{{ $passkey['name'] }}</span>
                                             @if ($passkey['authenticator'])
-                                                <flux:badge size="sm">{{ $passkey['authenticator'] }}</flux:badge>
+                                                <span class="set-pill">{{ $passkey['authenticator'] }}</span>
                                             @endif
                                         </div>
-                                        <p class="text-zinc-500 dark:text-zinc-400 text-xs">
-                                            {{ __('Added :time', ['time' => $passkey['created_at_diff']]) }}
+                                        <div class="pk-sub">
+                                            Added {{ $passkey['created_at_diff'] }}
                                             @if ($passkey['last_used_at_diff'])
-                                                <span class="opacity-50 mx-1">/</span>
-                                                {{ __('Last used :time', ['time' => $passkey['last_used_at_diff']]) }}
+                                                <span class="pk-dot"></span> Last used {{ $passkey['last_used_at_diff'] }}
                                             @endif
-                                        </p>
+                                        </div>
                                     </div>
+                                    <button type="button" class="pk-del" title="Remove passkey"
+                                            wire:click="confirmDelete({{ $passkey['id'] }})"
+                                            x-html="icon('Trash', { size: 15 })"></button>
                                 </div>
-
-                                <flux:button
-                                    variant="ghost"
-                                    size="sm"
-                                    icon="trash"
-                                    icon:variant="outline"
-                                    wire:click="confirmDelete({{ $passkey['id'] }})"
-                                    class="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50"
-                                />
-                            </div>
-                        @empty
-                            <div class="p-8 text-center">
-                                <div class="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl bg-zinc-100 dark:bg-zinc-800">
-                                    <flux:icon.key class="size-7 text-zinc-400 dark:text-zinc-500" />
+                            @empty
+                                <div class="pk-empty">
+                                    <span class="pk-empty-ic" x-html="icon('Key', { size: 20 })"></span>
+                                    <div class="pk-empty-h">No passkeys yet</div>
+                                    <div class="pk-empty-sub">Add a passkey to sign in without a password.</div>
                                 </div>
-                                <p class="font-medium">{{ __('No passkeys yet') }}</p>
-                                <flux:text class="mt-1">{{ __('Add a passkey to sign in without a password') }}</flux:text>
-                            </div>
-                        @endforelse
-                    </div>
+                            @endforelse
+                        </div>
 
-                    <x-passkey-registration />
-                </div>
-            </section>
-        @endif
-    </x-settings.layout>
-
-    <flux:modal
-        name="delete-passkey-modal"
-        class="max-w-md md:min-w-md"
-        @close="closeDeleteModal"
-        wire:model="showDeleteModal"
-    >
-        <div class="space-y-6">
-            <div class="space-y-2">
-                <flux:heading size="lg">{{ __('Remove passkey') }}</flux:heading>
-                <flux:text>
-                    {{ __('Are you sure you want to remove the passkey ":name"? You will no longer be able to use it to sign in.', ['name' => $deletingPasskeyName]) }}
-                </flux:text>
-            </div>
-
-            <div class="flex gap-3 justify-end">
-                <flux:button
-                    variant="outline"
-                    wire:click="closeDeleteModal"
-                >
-                    {{ __('Cancel') }}
-                </flux:button>
-                <flux:button
-                    variant="danger"
-                    wire:click="deletePasskey"
-                >
-                    {{ __('Remove passkey') }}
-                </flux:button>
+                        <div style="margin-top: 16px;">
+                            <x-passkey-registration />
+                        </div>
+                    </section>
+                @endif
             </div>
         </div>
-    </flux:modal>
-</section>
+    </div>
+
+    {{-- ───────── 2FA setup modal ───────── --}}
+    @if ($canManageTwoFactor)
+        <div class="pf-scrim" x-show="$wire.showModal" x-transition.opacity style="display:none"
+             wire:click="closeModal" @keydown.escape.window="$wire.showModal && $wire.closeModal()">
+            <div class="pf-card pf-card-wide" @click.stop x-show="$wire.showModal" x-transition.scale.origin.top>
+                <button type="button" class="pf-close" wire:click="closeModal" aria-label="Close" x-html="icon('X', { size: 16 })"></button>
+
+                <div class="set-modal-head">
+                    <h3 class="set-modal-title">{{ $this->modalConfig['title'] }}</h3>
+                    <p class="set-modal-desc">{{ $this->modalConfig['description'] }}</p>
+                </div>
+
+                @if ($showVerificationStep)
+                    <form wire:submit="confirmTwoFactor" class="set-form" style="max-width:none">
+                        <div class="field">
+                            <span class="field-label">Authentication code</span>
+                            <input class="input otp-input" inputmode="numeric" autocomplete="one-time-code"
+                                   maxlength="6" wire:model.live="code" x-init="$nextTick(() => $el.focus())" />
+                            @error('code') <span class="field-error">{{ $message }}</span> @enderror
+                        </div>
+                        <div class="set-modal-actions">
+                            <button type="button" class="btn" wire:click="resetVerification">Back</button>
+                            <button type="submit" class="btn btn-primary" x-bind:disabled="($wire.code || '').length < 6">Confirm</button>
+                        </div>
+                    </form>
+                @else
+                    @error('setupData')
+                        <div class="set-note danger">{{ $message }}</div>
+                    @enderror
+
+                    <div class="otp-qr">
+                        @empty($qrCodeSvg)
+                            <div class="otp-qr-loading">Loading…</div>
+                        @else
+                            <div class="otp-qr-svg">{!! $qrCodeSvg !!}</div>
+                        @endempty
+                    </div>
+
+                    @if (filled($manualSetupKey))
+                        <div class="field" x-data="{ copied: false, async copy() { try { await navigator.clipboard.writeText('{{ $manualSetupKey }}'); this.copied = true; setTimeout(() => this.copied = false, 1500); } catch (e) {} } }">
+                            <span class="field-label">Or enter this key manually</span>
+                            <div class="otp-key">
+                                <input class="input mono" type="text" readonly value="{{ $manualSetupKey }}" style="border:none; box-shadow:none;" />
+                                <button type="button" class="otp-key-copy" @click="copy()" :title="copied ? 'Copied' : 'Copy'">
+                                    <span x-show="!copied" x-html="icon('Copy', { size: 15 })"></span>
+                                    <span x-show="copied" x-cloak class="tk" x-html="icon('Check', { size: 15 })"></span>
+                                </button>
+                            </div>
+                        </div>
+                    @endif
+
+                    <div class="set-modal-actions">
+                        <button type="button" class="btn btn-primary" wire:click="showVerificationIfNecessary"
+                                @if ($errors->has('setupData')) disabled @endif>
+                            {{ $this->modalConfig['buttonText'] }}
+                        </button>
+                    </div>
+                @endif
+            </div>
+        </div>
+    @endif
+
+    {{-- ───────── delete passkey modal ───────── --}}
+    @if ($canManagePasskeys)
+        <div class="pf-scrim" x-show="$wire.showDeleteModal" x-transition.opacity style="display:none"
+             wire:click="closeDeleteModal" @keydown.escape.window="$wire.showDeleteModal && $wire.closeDeleteModal()">
+            <div class="pf-card" @click.stop x-show="$wire.showDeleteModal" x-transition.scale.origin.top>
+                <button type="button" class="pf-close" wire:click="closeDeleteModal" aria-label="Close" x-html="icon('X', { size: 16 })"></button>
+                <div class="set-modal-head">
+                    <h3 class="set-modal-title">Remove passkey</h3>
+                    <p class="set-modal-desc">Remove “{{ $deletingPasskeyName }}”? You'll no longer be able to use it to sign in.</p>
+                </div>
+                <div class="set-modal-actions">
+                    <button type="button" class="btn" wire:click="closeDeleteModal">Cancel</button>
+                    <button type="button" class="btn btn-danger-solid" wire:click="deletePasskey">Remove passkey</button>
+                </div>
+            </div>
+        </div>
+    @endif
+
+    {{-- ───────── toast ───────── --}}
+    <div class="toast" x-show="toast" x-transition style="display:none">
+        <span class="tk" x-html="icon('Check', { size: 15 })"></span>
+        <span x-text="toast"></span>
+    </div>
+</div>
