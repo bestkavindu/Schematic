@@ -351,13 +351,21 @@
                         <span style="color: var(--faint); font-weight: 500; text-transform: none; letter-spacing: 0;" x-text="editorTable.columns.length"></span>
                     </div>
 
-                    <template x-for="col in editorTable.columns" :key="col.id">
+                    <template x-for="(col, colIdx) in editorTable.columns" :key="col.id">
                         <div class="col-card" :class="{ open: editorOpenCols.includes(col.id) }">
                             <div class="col-card-head" @click="toggleEditorCol(col.id)">
                                 <span style="color: var(--muted); display: flex;"
                                       x-html="editorOpenCols.includes(col.id) ? icon('ChevronDown', { size: 15 }) : icon('ChevronRight', { size: 15 })"></span>
                                 <span style="display:flex" x-html="colIconEditor(col)"></span>
                                 <span style="font-family: var(--mono); font-size: 12.5px; font-weight: 540; flex: 1;" x-text="col.name"></span>
+                                <span class="col-reorder">
+                                    <button type="button" class="col-move" :disabled="colIdx === 0"
+                                            @click.stop="moveColumn(editorTable, col, -1)" title="Move up"
+                                            x-html="icon('ArrowUp', { size: 13 })"></button>
+                                    <button type="button" class="col-move" :disabled="colIdx === editorTable.columns.length - 1"
+                                            @click.stop="moveColumn(editorTable, col, 1)" title="Move down"
+                                            x-html="icon('ArrowDown', { size: 13 })"></button>
+                                </span>
                                 <span class="col-badge" x-text="typeLabel(col)"></span>
                             </div>
                             <template x-if="editorOpenCols.includes(col.id)">

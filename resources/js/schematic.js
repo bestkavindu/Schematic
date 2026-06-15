@@ -103,6 +103,8 @@ const ICON_PATHS = {
     Plus: '<path d="M12 5v14M5 12h14" />',
     ChevronRight: '<path d="m9 6 6 6-6 6" />',
     ChevronDown: '<path d="m6 9 6 6 6-6" />',
+    ArrowUp: '<path d="M12 19V5M5 12l7-7 7 7" />',
+    ArrowDown: '<path d="M12 5v14M5 12l7 7 7-7" />',
     Kebab: '<circle cx="12" cy="5" r="1.4" /><circle cx="12" cy="12" r="1.4" /><circle cx="12" cy="19" r="1.4" />',
     Table: '<rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M3 15h18M9 3v18" />',
     Key: '<circle cx="7.5" cy="15.5" r="4.5" /><path d="m10.5 12.5 7-7M16 4l3 3M14 6l3 3" />',
@@ -433,6 +435,14 @@ function schematicBuilder(initial) {
             if (!this.expanded.includes(id)) this.expanded = [...this.expanded, id];
         },
         deleteColumn(table, col) { table.columns = table.columns.filter((c) => c.id !== col.id); },
+        moveColumn(table, col, dir) {
+            if (!table) return;
+            const from = table.columns.findIndex((c) => c.id === col.id);
+            const to = from + dir;
+            if (from < 0 || to < 0 || to >= table.columns.length) return;
+            const [m] = table.columns.splice(from, 1);
+            table.columns.splice(to, 0, m);
+        },
         toggleEditorCol(id) {
             this.editorOpenCols = this.editorOpenCols.includes(id)
                 ? this.editorOpenCols.filter((x) => x !== id) : [...this.editorOpenCols, id];

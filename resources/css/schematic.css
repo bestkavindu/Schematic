@@ -328,6 +328,11 @@ input { font-family: inherit; }
 .col-card-head { display: flex; align-items: center; gap: 8px; padding: 9px 10px; cursor: pointer; }
 .col-card-head:hover { background: var(--surface-2); border-radius: var(--r); }
 .col-badge { font-family: var(--mono); font-size: 10px; padding: 1px 5px; border-radius: 4px; background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
+.col-reorder { display: flex; align-items: center; gap: 2px; opacity: .6; transition: opacity .12s; }
+.col-card-head:hover .col-reorder { opacity: 1; }
+.col-move { display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 4px; color: var(--muted); border: 1px solid var(--border); background: var(--surface); }
+.col-move:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); border-color: var(--faint); }
+.col-move:disabled { opacity: .35; cursor: default; }
 .col-card-body { padding: 4px 10px 12px; display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--border); }
 
 .field { display: flex; flex-direction: column; gap: 5px; }
