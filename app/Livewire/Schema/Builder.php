@@ -171,6 +171,18 @@ class Builder extends Component
         $this->project->update(['favorite' => ! $this->project->favorite]);
     }
 
+    /**
+     * Delete the current project and return to the schema list.
+     */
+    public function deleteProject()
+    {
+        abort_unless($this->project->user_id === Auth::id(), 403);
+
+        $this->project->delete();
+
+        return $this->redirectRoute('schemas.index', navigate: true);
+    }
+
     public function render(): View
     {
         $view = view('livewire.schema.builder');

@@ -82,6 +82,13 @@
                         <span x-html="icon('Layout', { size: 15 })" style="display:flex"></span><span>All schemas</span>
                     </a>
                     <div class="menu-sep"></div>
+                    <button type="button" class="menu-item danger" style="width:100%"
+                            wire:click="deleteProject"
+                            wire:confirm="Delete this schema permanently? All its tables and columns will be removed."
+                            @click="avatarMenu = false">
+                        <span x-html="icon('Trash', { size: 15 })" style="display:flex"></span><span>Delete schema</span>
+                    </button>
+                    <div class="menu-sep"></div>
                     <form method="POST" action="{{ route('logout') }}">
                         @csrf
                         <button type="submit" class="menu-item danger" style="width:100%">
