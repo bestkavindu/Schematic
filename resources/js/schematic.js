@@ -10,6 +10,9 @@ import JSZip from 'jszip';
 // ---------- static data (ported from the design's data.js) ----------
 const GEO = { CARD_W: 264, HEADER_H: 46, ROW_H: 34 };
 
+// Minimum drag-resize footprint for a group container.
+const GROUP_MIN_W = 220, GROUP_MIN_H = 150;
+
 const COLOR_KEYS = ['blue', 'green', 'purple', 'amber', 'red', 'teal', 'orange', 'pink'];
 
 const LARAVEL_TYPES = [
@@ -71,6 +74,9 @@ const uid = (p) => p + (_newId++);
 function blankColumn(name = 'column', type = 'string') {
     return { id: uid('c'), name, type, nullable: false, pk: false, unique: false, index: false, default: '', fk: null };
 }
+function blankGroup(x, y, color) {
+    return { id: uid('g'), name: 'New group', color: color || 'blue', x, y, w: 380, h: 280 };
+}
 function blankTable(x, y, color) {
     return {
         id: uid('t'), name: 'new_table', color: color || COLOR_KEYS[Math.floor(Math.random() * 8)],
@@ -131,6 +137,7 @@ const ICON_PATHS = {
     Save: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><path d="M17 21v-8H7v8M7 3v5h8" />',
     Bell: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />',
     Star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26" />',
+    Group: '<rect x="3" y="3" width="8" height="8" rx="1.5" /><rect x="13" y="13" width="8" height="8" rx="1.5" /><path d="M13 7h4a2 2 0 0 1 2 2v2M11 17H7a2 2 0 0 1-2-2v-2" />',
 };
 function icon(name, opts = {}) {
     const size = opts.size || 16;
@@ -178,8 +185,12 @@ function schematicBuilder(initial) {
     return {
         projectName: initial.name || 'Untitled Schema',
         tables: clone(initial.tables || []),
+        groups: clone(initial.groups || []),
 
         selectedIds: [],
+        selectedGroupId: null,
+        groupRenamingId: null,
+        groupMenu: null,
         editorId: null,
         editorOpenCols: [],
         sidebarCollapsed: false,
@@ -222,8 +233,9 @@ function schematicBuilder(initial) {
             this.$watch('tweaks.accent', () => this.applyAccent());
             this.$watch('tweaks.radius', () => this.applyRadius());
             this.$watch('tables', () => { this.dirty = true; }, { deep: true });
+            this.$watch('groups', () => { this.dirty = true; }, { deep: true });
             this.$watch('projectName', () => { this.dirty = true; });
-            this.$nextTick(() => { if (this.tables.length) this.fitToScreen(); });
+            this.$nextTick(() => { if (this.tables.length || this.groups.length) this.fitToScreen(); });
         },
 
         // ----- tweaks -----
@@ -385,8 +397,8 @@ function schematicBuilder(initial) {
         toggleExpand(id) {
             this.expanded = this.expanded.includes(id) ? this.expanded.filter((x) => x !== id) : [...this.expanded, id];
         },
-        selectOnly(id) { this.selectedIds = [id]; this.editorId = id; },
-        openEditor(id) { this.editorId = id; this.selectedIds = [id]; },
+        selectOnly(id) { this.selectedIds = [id]; this.editorId = id; this.selectedGroupId = null; },
+        openEditor(id) { this.editorId = id; this.selectedIds = [id]; this.selectedGroupId = null; },
         closeEditor() { this.editorId = null; },
 
         // ----- table ops -----
@@ -429,6 +441,96 @@ function schematicBuilder(initial) {
             this.tables = arr;
         },
         colorTable(id, color) { const t = this.tables.find((x) => x.id === id); if (t) t.color = color; },
+
+        // ----- groups (cosmetic containers) -----
+        groupColor(g) { return this.palette[g.color] || this.palette.blue; },
+        groupStyle(g) {
+            const c = this.groupColor(g);
+            return {
+                transform: `translate(${g.x}px, ${g.y}px)`,
+                width: g.w + 'px',
+                height: g.h + 'px',
+                background: c.tint,
+                borderColor: c.bar,
+            };
+        },
+        groupHeadStyle(g) {
+            const c = this.groupColor(g);
+            return { background: c.soft, color: c.text };
+        },
+        isGroupSelected(id) { return this.selectedGroupId === id; },
+        // Tables a group "owns" — those whose card center falls inside the group rect.
+        tablesInGroup(g) {
+            return this.tables.filter((t) => {
+                const cx = t.x + GEO.CARD_W / 2;
+                const cy = t.y + cardHeight(t) / 2;
+                return cx >= g.x && cx <= g.x + g.w && cy >= g.y && cy <= g.y + g.h;
+            });
+        },
+        addGroup(world) {
+            const w = world && typeof world === 'object'
+                ? world
+                : { x: (-this.view.tx + 360) / this.view.scale, y: (-this.view.ty + 200) / this.view.scale };
+            const g = blankGroup(Math.round(w.x), Math.round(w.y), COLOR_KEYS[this.groups.length % 8]);
+            this.groups.push(g);
+            this.selectedGroupId = g.id;
+            this.selectedIds = [];
+            this.toast('Group created');
+        },
+        // Wrap the currently-selected tables in a new group sized to their bounding box.
+        groupSelected() {
+            const sel = this.tables.filter((t) => this.selectedIds.includes(t.id));
+            if (!sel.length) { this.toast('Select tables to group first'); return; }
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            sel.forEach((t) => {
+                minX = Math.min(minX, t.x); minY = Math.min(minY, t.y);
+                maxX = Math.max(maxX, t.x + GEO.CARD_W); maxY = Math.max(maxY, t.y + cardHeight(t));
+            });
+            const padX = 28, padTop = 46, padBottom = 28;
+            const g = blankGroup(Math.round(minX - padX), Math.round(minY - padTop), COLOR_KEYS[this.groups.length % 8]);
+            g.w = Math.max(GROUP_MIN_W, Math.round((maxX - minX) + padX * 2));
+            g.h = Math.max(GROUP_MIN_H, Math.round((maxY - minY) + padTop + padBottom));
+            this.groups.push(g);
+            this.selectedGroupId = g.id;
+            this.toast(`Grouped ${sel.length} table${sel.length === 1 ? '' : 's'}`);
+        },
+        deleteGroup(id) {
+            this.groups = this.groups.filter((g) => g.id !== id);
+            if (this.selectedGroupId === id) this.selectedGroupId = null;
+            if (this.groupRenamingId === id) this.groupRenamingId = null;
+            this.groupMenu = null;
+            this.toast('Group deleted');
+        },
+        colorGroup(id, color) { const g = this.groups.find((x) => x.id === id); if (g) g.color = color; },
+        // Restore a sensible label if the inline rename was left blank.
+        renameGroupDone(g) { if (!g.name || !g.name.trim()) g.name = 'Untitled group'; this.groupRenamingId = null; },
+        groupMenuGroup() { return this.groupMenu ? this.groups.find((x) => x.id === this.groupMenu.id) : null; },
+        onGroupContext(e, id) {
+            this.selectedGroupId = id;
+            this.groupMenu = { x: e.clientX, y: e.clientY, id };
+        },
+        // Drag a group by its header — moves the group and every table inside it together.
+        onGroupHeadPointerDown(e, id) {
+            if (e.button !== 0) return;
+            e.stopPropagation();
+            const g = this.groups.find((x) => x.id === id);
+            if (!g) return;
+            this.selectedGroupId = id;
+            this.selectedIds = [];
+            this.editorId = null;
+            const members = this.tablesInGroup(g).map((t) => t.id);
+            const starts = {};
+            members.forEach((tid) => { const t = this.tables.find((x) => x.id === tid); if (t) starts[tid] = { x: t.x, y: t.y }; });
+            this._drag = { mode: 'group', id, members, starts, gStart: { x: g.x, y: g.y }, startX: e.clientX, startY: e.clientY, moved: false };
+        },
+        startGroupResize(e, id) {
+            if (e.button !== 0) return;
+            e.stopPropagation();
+            const g = this.groups.find((x) => x.id === id);
+            if (!g) return;
+            this.selectedGroupId = id;
+            this._drag = { mode: 'groupResize', id, wStart: g.w, hStart: g.h, startX: e.clientX, startY: e.clientY, moved: false };
+        },
 
         // ----- column ops -----
         addColumn(id) {
@@ -541,6 +643,7 @@ function schematicBuilder(initial) {
         stageStyle() { return { transform: `translate(${this.view.tx}px, ${this.view.ty}px) scale(${this.view.scale})` }; },
         zoom(delta) { this.view = { ...this.view, scale: Math.min(2.2, Math.max(0.25, this.view.scale + delta)) }; },
         onWheel(e) {
+            if (this._drag) return;   // don't rescale mid-drag — the in-flight delta is measured at the old scale
             const rect = this.$refs.wrap.getBoundingClientRect();
             const mx = e.clientX - rect.left, my = e.clientY - rect.top;
             let ns = e.ctrlKey || e.metaKey
@@ -552,12 +655,16 @@ function schematicBuilder(initial) {
         },
         fitToScreen() {
             const wrap = this.$refs.wrap;
-            if (!this.tables.length || !wrap) return;
+            if ((!this.tables.length && !this.groups.length) || !wrap) return;
             const W = GEO.CARD_W;
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
             this.tables.forEach((t) => {
                 minX = Math.min(minX, t.x); minY = Math.min(minY, t.y);
                 maxX = Math.max(maxX, t.x + W); maxY = Math.max(maxY, t.y + cardHeight(t));
+            });
+            this.groups.forEach((g) => {
+                minX = Math.min(minX, g.x); minY = Math.min(minY, g.y);
+                maxX = Math.max(maxX, g.x + g.w); maxY = Math.max(maxY, g.y + g.h);
             });
             const pad = 80, cw = wrap.clientWidth, ch = wrap.clientHeight;
             const bw = maxX - minX + pad * 2, bh = maxY - minY + pad * 2;
@@ -577,6 +684,7 @@ function schematicBuilder(initial) {
             if (!e.shiftKey) this.selectedIds = [];
             this.selectedRelId = null;
             this.relMenu = null;
+            this.selectedGroupId = null;
         },
 
         // ----- relationship drag-to-connect -----
@@ -636,6 +744,7 @@ function schematicBuilder(initial) {
         onCardPointerDown(e, id) {
             if (e.button !== 0) return;
             e.stopPropagation();
+            this.selectedGroupId = null;   // selecting a table clears any group selection
             const onHead = !!e.target.closest('.card-head');
             let sel = [...this.selectedIds];
             if (e.shiftKey) sel = sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id];
@@ -660,6 +769,25 @@ function schematicBuilder(initial) {
                 return;
             }
             if (d.mode === 'pan') { this.view = { ...this.view, tx: d.tx + dx, ty: d.ty + dy }; return; }
+            if (d.mode === 'group') {
+                const sc = this.view.scale;
+                const g = this.groups.find((x) => x.id === d.id);
+                if (g) { g.x = d.gStart.x + dx / sc; g.y = d.gStart.y + dy / sc; }
+                d.members.forEach((tid) => {
+                    const t = this.tables.find((x) => x.id === tid);
+                    if (t) { t.x = d.starts[tid].x + dx / sc; t.y = d.starts[tid].y + dy / sc; }
+                });
+                return;
+            }
+            if (d.mode === 'groupResize') {
+                const sc = this.view.scale;
+                const g = this.groups.find((x) => x.id === d.id);
+                if (g) {
+                    g.w = Math.max(GROUP_MIN_W, d.wStart + dx / sc);
+                    g.h = Math.max(GROUP_MIN_H, d.hStart + dy / sc);
+                }
+                return;
+            }
             const sc = this.view.scale;
             d.ids.forEach((tid) => {
                 const t = this.tables.find((x) => x.id === tid);
@@ -735,6 +863,9 @@ function schematicBuilder(initial) {
         payload() {
             return JSON.parse(JSON.stringify({
                 name: this.projectName,
+                groups: this.groups.map((g) => ({
+                    id: g.id, name: g.name, color: g.color, x: g.x, y: g.y, w: g.w, h: g.h,
+                })),
                 tables: this.tables.map((t) => ({
                     id: t.id, name: t.name, color: t.color, x: t.x, y: t.y,
                     indexes: t.indexes || [],

@@ -208,6 +208,27 @@
             </template>
 
             <div class="canvas-stage" :style="stageStyle()">
+                {{-- group containers (rendered behind tables) --}}
+                <template x-for="g in groups" :key="g.id">
+                    <div class="sgroup" :class="{ selected: isGroupSelected(g.id) }" :style="groupStyle(g)"
+                         @contextmenu.prevent.stop="onGroupContext($event, g.id)">
+                        <div class="sgroup-head" :style="groupHeadStyle(g)"
+                             @pointerdown="onGroupHeadPointerDown($event, g.id)"
+                             @dblclick.stop="groupRenamingId = g.id">
+                            <span class="sgroup-ic" x-html="icon('Group', { size: 13 })"></span>
+                            <template x-if="groupRenamingId === g.id">
+                                <input class="sgroup-rename" x-model="g.name" x-init="$nextTick(() => $el.focus())"
+                                       @pointerdown.stop @click.stop
+                                       @blur="renameGroupDone(g)" @keydown.enter="$event.target.blur()" @keydown.escape="renameGroupDone(g)" />
+                            </template>
+                            <template x-if="groupRenamingId !== g.id">
+                                <span class="sgroup-name" x-text="g.name"></span>
+                            </template>
+                        </div>
+                        <div class="sgroup-resize" title="Resize group" @pointerdown="startGroupResize($event, g.id)"></div>
+                    </div>
+                </template>
+
                 <svg class="lines-svg" width="1" height="1" x-html="relsSvg()"></svg>
 
                 <template x-for="t in tables" :key="t.id">
@@ -267,6 +288,8 @@
                 <button class="cc-btn" title="Fit to screen" @click="fitToScreen()" x-html="icon('Fit', { size: 17 })"></button>
                 <div class="cc-sep"></div>
                 <button class="cc-btn" title="Auto-arrange" @click="autoArrange()" x-html="icon('Layout', { size: 17 })"></button>
+                <div class="cc-sep"></div>
+                <button class="cc-btn" title="Add group" @click="addGroup()" x-html="icon('Group', { size: 17 })"></button>
             </div>
 
             {{-- canvas / card context menu --}}
@@ -279,6 +302,9 @@
                             </button>
                             <button class="menu-item" @click="duplicateTable(cardMenu.id); cardMenu = null">
                                 <span x-html="icon('Copy', { size: 15 })" style="display:flex"></span><span>Duplicate</span>
+                            </button>
+                            <button class="menu-item" @click="groupSelected(); cardMenu = null">
+                                <span x-html="icon('Group', { size: 15 })" style="display:flex"></span><span x-text="selectedIds.length > 1 ? 'Group selected tables' : 'Wrap in group'"></span>
                             </button>
                             <template x-if="selectedIds.length === 2">
                                 <button class="menu-item" @click="createPivot(selectedIds[0], selectedIds[1]); cardMenu = null">
@@ -295,6 +321,9 @@
                         <div>
                             <button class="menu-item" @click="addTable(cardMenu.world); cardMenu = null">
                                 <span x-html="icon('Plus', { size: 15 })" style="display:flex"></span><span>New table here</span>
+                            </button>
+                            <button class="menu-item" @click="addGroup(cardMenu.world); cardMenu = null">
+                                <span x-html="icon('Group', { size: 15 })" style="display:flex"></span><span>New group here</span>
                             </button>
                             <button class="menu-item" @click="autoArrange(); cardMenu = null">
                                 <span x-html="icon('Layout', { size: 15 })" style="display:flex"></span><span>Auto-arrange</span>
@@ -316,6 +345,27 @@
                 <div class="menu" :style="menuStyle(relMenu)" @pointerdown.outside="relMenu = null" @keydown.escape.window="relMenu = null">
                     <button class="menu-item danger" @click="deleteRel(relMenu.relId)">
                         <span x-html="icon('Trash', { size: 15 })" style="display:flex"></span><span>Delete relationship</span>
+                    </button>
+                </div>
+            </template>
+
+            {{-- group context menu --}}
+            <template x-if="groupMenu">
+                <div class="menu" :style="menuStyle(groupMenu)" @click.outside="groupMenu = null" @keydown.escape.window="groupMenu = null">
+                    <button class="menu-item" @click="groupRenamingId = groupMenu.id; groupMenu = null">
+                        <span x-html="icon('Edit', { size: 15 })" style="display:flex"></span><span>Rename</span>
+                    </button>
+                    <div class="menu-sep"></div>
+                    <div style="font-size: 11px; font-weight: 600; color: var(--muted); padding: 2px 9px 0;">Color</div>
+                    <div class="menu-swatches">
+                        <template x-for="k in colorKeys" :key="k">
+                            <button class="swatch" :class="{ sel: groupMenuGroup() && groupMenuGroup().color === k }"
+                                    :style="'background:' + (palette[k] || palette.blue).bar" @click="colorGroup(groupMenu.id, k); groupMenu = null"></button>
+                        </template>
+                    </div>
+                    <div class="menu-sep"></div>
+                    <button class="menu-item danger" @click="deleteGroup(groupMenu.id)">
+                        <span x-html="icon('Trash', { size: 15 })" style="display:flex"></span><span>Delete group</span>
                     </button>
                 </div>
             </template>

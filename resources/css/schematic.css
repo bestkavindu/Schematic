@@ -235,6 +235,41 @@ input { font-family: inherit; }
 .canvas-stage { position: absolute; top: 0; left: 0; transform-origin: 0 0; will-change: transform; }
 .lines-svg { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; }
 
+/* group container (cosmetic, sits behind the table cards) */
+/* No z-index here on purpose: .sgroup must NOT form a stacking context, so the head/resize
+   handles below can paint ABOVE the table cards (which come later in the DOM at z:auto).
+   The body stays pointer-events:none and paints behind cards via tree order. */
+.sgroup {
+  position: absolute; top: 0; left: 0;
+  border: 1.5px solid; border-radius: var(--r-lg);
+  pointer-events: none; transition: box-shadow .12s;
+}
+.sgroup.selected { box-shadow: 0 0 0 3px var(--accent-soft); }
+.sgroup-head {
+  pointer-events: auto; position: relative; z-index: 9;
+  display: flex; align-items: center; gap: 7px;
+  height: 30px; padding: 0 11px; cursor: grab;
+  font-size: 12.5px; font-weight: 650; letter-spacing: -.01em;
+  border-radius: calc(var(--r-lg) - 2px) calc(var(--r-lg) - 2px) 0 0;
+  border-bottom: 1px solid rgba(0, 0, 0, .05);
+}
+.sgroup-head:active { cursor: grabbing; }
+.sgroup-ic { display: flex; opacity: .8; flex: 0 0 auto; }
+.sgroup-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sgroup-rename {
+  flex: 1; min-width: 0; height: 22px; padding: 1px 6px; font: inherit; font-weight: 650;
+  border: 1px solid var(--border-strong); border-radius: var(--r-sm); background: var(--surface); outline: none;
+}
+.sgroup-resize {
+  pointer-events: auto; position: absolute; z-index: 9; right: -5px; bottom: -5px;
+  width: 18px; height: 18px; cursor: nwse-resize; opacity: 0; transition: opacity .12s;
+}
+.sgroup:hover .sgroup-resize, .sgroup.selected .sgroup-resize { opacity: 1; }
+.sgroup-resize::after {
+  content: ''; position: absolute; right: 5px; bottom: 5px; width: 9px; height: 9px;
+  border-right: 2px solid var(--faint); border-bottom: 2px solid var(--faint); border-radius: 0 0 3px 0;
+}
+
 /* table card */
 .card {
   position: absolute; width: 264px; background: var(--surface);
