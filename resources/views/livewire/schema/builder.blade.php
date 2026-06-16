@@ -183,7 +183,7 @@
         </button>
 
         {{-- Canvas --}}
-        <div class="canvas-wrap" x-ref="wrap"
+        <div class="canvas-wrap" x-ref="wrap" :class="{ interacting: !!_drag }"
              @pointerdown="onBgPointerDown($event)"
              @pointermove.window="onPointerMove($event)"
              @pointerup.window="onPointerUp()"
