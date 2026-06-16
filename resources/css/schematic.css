@@ -232,7 +232,11 @@ input { font-family: inherit; }
 /* ---------- Canvas ---------- */
 .canvas-wrap { flex: 1; position: relative; overflow: hidden; background: var(--bg); min-width: 0; }
 .canvas-grid { position: absolute; inset: 0; }
-.canvas-stage { position: absolute; top: 0; left: 0; transform-origin: 0 0; will-change: transform; }
+.canvas-stage { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+/* Promote to a GPU layer only while panning/dragging — at rest the browser repaints
+   at the zoomed scale so text/borders stay crisp instead of an upscaled 1x bitmap. */
+.canvas-wrap.interacting .canvas-stage,
+.canvas-wrap.interacting .card { will-change: transform; }
 .lines-svg { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; }
 
 /* group container (cosmetic, sits behind the table cards) */
@@ -275,7 +279,6 @@ input { font-family: inherit; }
   position: absolute; width: 264px; background: var(--surface);
   border: 1px solid var(--border-strong); border-radius: var(--r);
   box-shadow: var(--shadow-card); overflow: hidden; transition: box-shadow .15s, border-color .15s;
-  will-change: transform;
 }
 .card.selected { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-pop); z-index: 5; }
 .card.dragging { box-shadow: var(--shadow-pop); z-index: 10; cursor: grabbing; }
