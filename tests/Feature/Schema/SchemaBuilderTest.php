@@ -236,3 +236,50 @@ test('saving rejects a relationship without a target column', function () {
         ->call('save', relationshipPayload(['table' => 't_parent', 'column' => '']))
         ->assertHasErrors();
 });
+
+test('saving persists groups and the schema round-trips them', function () {
+    $user = User::factory()->create();
+    $project = $user->schemaProjects()->create(['name' => 'Grouped']);
+    $this->actingAs($user);
+
+    $payload = [
+        'name' => 'Grouped',
+        'tables' => [],
+        'groups' => [
+            ['id' => 'g1', 'name' => 'Product', 'color' => 'green', 'x' => 80, 'y' => 60, 'w' => 420, 'h' => 300],
+            ['id' => 'g2', 'name' => 'Billing', 'color' => 'amber', 'x' => 560.4, 'y' => 60, 'w' => 360, 'h' => 280],
+        ],
+    ];
+
+    Livewire::test(Builder::class, ['project' => $project])
+        ->call('save', $payload)
+        ->assertHasNoErrors();
+
+    $project->refresh();
+    expect($project->groups()->count())->toBe(2);
+
+    $product = $project->groups()->where('client_id', 'g1')->first();
+    expect($product->name)->toBe('Product');
+    expect($product->color)->toBe('green');
+    expect($product->pos_x)->toBe(80);
+    expect($product->width)->toBe(420);
+
+    // Float positions are rounded to ints on the way in.
+    expect($project->groups()->where('client_id', 'g2')->first()->pos_x)->toBe(560);
+
+    $schema = Livewire::test(Builder::class, ['project' => $project])->instance()->schema();
+    expect($schema['groups'])->toHaveCount(2);
+    expect($schema['groups'][0])->toMatchArray(['id' => 'g1', 'name' => 'Product', 'x' => 80, 'w' => 420]);
+});
+
+test('saving a payload without groups leaves none and does not error', function () {
+    $user = User::factory()->create();
+    $project = $user->schemaProjects()->create(['name' => 'NoGroups']);
+    $this->actingAs($user);
+
+    Livewire::test(Builder::class, ['project' => $project])
+        ->call('save', ['name' => 'NoGroups', 'tables' => []])
+        ->assertHasNoErrors();
+
+    expect($project->refresh()->groups()->count())->toBe(0);
+});

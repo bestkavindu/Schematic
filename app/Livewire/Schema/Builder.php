@@ -3,6 +3,7 @@
 namespace App\Livewire\Schema;
 
 use App\Models\SchemaColumn;
+use App\Models\SchemaGroup;
 use App\Models\SchemaProject;
 use App\Models\SchemaTable;
 use Illuminate\Contracts\View\View;
@@ -27,7 +28,7 @@ class Builder extends Component
     /**
      * Serialize the project into the JSON shape the canvas understands.
      *
-     * @return array{name: string, tables: array<int, array<string, mixed>>}
+     * @return array{name: string, tables: array<int, array<string, mixed>>, groups: array<int, array<string, mixed>>}
      */
     #[Computed]
     public function schema(): array
@@ -60,7 +61,17 @@ class Builder extends Component
             ])->all(),
         ])->all();
 
-        return ['name' => $this->project->name, 'tables' => $tables];
+        $groups = $this->project->groups()->get()->map(fn (SchemaGroup $group): array => [
+            'id' => $group->client_id,
+            'name' => $group->name,
+            'color' => $group->color,
+            'x' => $group->pos_x,
+            'y' => $group->pos_y,
+            'w' => $group->width,
+            'h' => $group->height,
+        ])->all();
+
+        return ['name' => $this->project->name, 'tables' => $tables, 'groups' => $groups];
     }
 
     /**
@@ -91,6 +102,15 @@ class Builder extends Component
             'tables.*.columns.*.fk.type' => ['nullable', 'in:1:N,1:1'],
             'tables.*.columns.*.fk.onDelete' => ['nullable', 'in:cascade,restrict,set null,no action'],
             'tables.*.columns.*.fk.onUpdate' => ['nullable', 'in:cascade,restrict,set null,no action'],
+            // Groups are cosmetic containers; absent on older clients, so validate only when present.
+            'groups' => ['sometimes', 'array'],
+            'groups.*.id' => ['required', 'string', 'max:64'],
+            'groups.*.name' => ['required', 'string', 'max:120'],
+            'groups.*.color' => ['required', 'string', 'max:24'],
+            'groups.*.x' => ['required', 'numeric'],
+            'groups.*.y' => ['required', 'numeric'],
+            'groups.*.w' => ['required', 'numeric'],
+            'groups.*.h' => ['required', 'numeric'],
         ]);
 
         // Cross-field checks the flat rules can't express: a relationship needs a target
@@ -157,6 +177,21 @@ class Builder extends Component
                         'sort' => $columnIndex,
                     ]);
                 }
+            }
+
+            $this->project->groups()->delete();
+
+            foreach (($payload['groups'] ?? []) as $groupIndex => $groupData) {
+                $this->project->groups()->create([
+                    'client_id' => $groupData['id'],
+                    'name' => $groupData['name'],
+                    'color' => $groupData['color'],
+                    'pos_x' => (int) round($groupData['x']),
+                    'pos_y' => (int) round($groupData['y']),
+                    'width' => (int) round($groupData['w']),
+                    'height' => (int) round($groupData['h']),
+                    'sort' => $groupIndex,
+                ]);
             }
         });
 
