@@ -43,7 +43,7 @@
                             <span x-html="icon('Database', { size: 15 })" style="display:flex"></span><span style="flex:1">Export SQL</span>
                         </button>
                         <button class="menu-item" @click="exportMigration(); exportMenu = false">
-                            <span x-html="icon('Layout', { size: 15 })" style="display:flex"></span><span style="flex:1">Laravel migration</span>
+                            <span x-html="icon('Layout', { size: 15 })" style="display:flex"></span><span style="flex:1">Laravel migration + models (.zip)</span>
                         </button>
                         <div class="menu-sep"></div>
                         <button class="menu-item" @click="triggerImport()">

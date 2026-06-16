@@ -5,6 +5,8 @@
  * lines); the surrounding Livewire component handles persistence via $wire.save().
  */
 
+import JSZip from 'jszip';
+
 // ---------- static data (ported from the design's data.js) ----------
 const GEO = { CARD_W: 264, HEADER_H: 46, ROW_H: 34 };
 
@@ -863,8 +865,111 @@ function schematicBuilder(initial) {
             });
             const body = blocks.join('\n\n');
             const text = `<?php\n\nuse Illuminate\\Database\\Migrations\\Migration;\nuse Illuminate\\Database\\Schema\\Blueprint;\nuse Illuminate\\Support\\Facades\\Schema;\n\nreturn new class extends Migration\n{\n    public function up(): void\n    {\n${body}\n    }\n\n    public function down(): void\n    {\n${this.tables.slice().reverse().map((t) => `        Schema::dropIfExists('${t.name}');`).join('\n')}\n    }\n};\n`;
-            this._download(text, '_migration.php', 'text/plain');
-            this.toast('Exported Laravel migration');
+            this._exportZip(text);
+        },
+
+        // ----- Eloquent model export -----
+        // StudlyCase, e.g. blog_posts -> BlogPosts
+        _studly(s) {
+            return String(s).split(/[^a-zA-Z0-9]+/).filter(Boolean)
+                .map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join('');
+        },
+        // Naive singularizer good enough for table -> model names.
+        _singular(s) {
+            const w = String(s);
+            if (/ies$/i.test(w)) return w.replace(/ies$/i, 'y');
+            if (/(ses|xes|zes|ches|shes)$/i.test(w)) return w.replace(/es$/i, '');
+            if (/ss$/i.test(w)) return w;
+            if (/s$/i.test(w)) return w.replace(/s$/i, '');
+            return w;
+        },
+        _camel(s) { const st = this._studly(s); return st.charAt(0).toLowerCase() + st.slice(1); },
+        _modelClass(table) { return this._studly(this._singular(table)); },
+
+        // Build a complete app/Models/<Class>.php file for one table.
+        _modelFile(t) {
+            const CAST = { boolean: 'boolean', json: 'array', date: 'date', datetime: 'datetime', timestamp: 'datetime', decimal: 'decimal:2', float: 'float' };
+            const skip = new Set(['id', 'created_at', 'updated_at', 'deleted_at']);
+            const cls = this._modelClass(t.name);
+            const hasTimestamps = t.columns.some((c) => c.name === 'created_at') && t.columns.some((c) => c.name === 'updated_at');
+
+            const fillable = t.columns.filter((c) => !c.pk && !skip.has(c.name)).map((c) => c.name);
+            const casts = t.columns
+                .filter((c) => CAST[c.type] && !skip.has(c.name))
+                .map((c) => `        '${c.name}' => '${CAST[c.type]}',`);
+
+            const relUses = new Set();
+            const methods = [];
+            // belongsTo for every FK column on this table
+            t.columns.filter((c) => c.fk).forEach((c) => {
+                const tgt = this.tables.find((x) => x.id === c.fk.table);
+                if (!tgt) return;
+                relUses.add('BelongsTo');
+                const name = this._camel(this._singular(tgt.name));
+                let args = `${this._modelClass(tgt.name)}::class`;
+                if (c.fk.column && c.fk.column !== 'id') args += `, '${c.name}', '${c.fk.column}'`;
+                else if (c.name !== name + '_id') args += `, '${c.name}'`;
+                methods.push(`    public function ${name}(): BelongsTo\n    {\n        return $this->belongsTo(${args});\n    }`);
+            });
+            // hasMany / hasOne for FK columns on other tables that point here
+            this.tables.forEach((ot) => {
+                ot.columns.filter((c) => c.fk && c.fk.table === t.id).forEach((c) => {
+                    const owning = this._modelClass(ot.name);
+                    if (c.fk.type === '1:1') {
+                        relUses.add('HasOne');
+                        const name = this._camel(this._singular(ot.name));
+                        methods.push(`    public function ${name}(): HasOne\n    {\n        return $this->hasOne(${owning}::class, '${c.name}');\n    }`);
+                    } else {
+                        relUses.add('HasMany');
+                        const name = this._camel(ot.name);
+                        methods.push(`    public function ${name}(): HasMany\n    {\n        return $this->hasMany(${owning}::class, '${c.name}');\n    }`);
+                    }
+                });
+            });
+
+            const uses = ['use Illuminate\\Database\\Eloquent\\Model;'];
+            if (relUses.has('BelongsTo')) uses.push('use Illuminate\\Database\\Eloquent\\Relations\\BelongsTo;');
+            if (relUses.has('HasMany')) uses.push('use Illuminate\\Database\\Eloquent\\Relations\\HasMany;');
+            if (relUses.has('HasOne')) uses.push('use Illuminate\\Database\\Eloquent\\Relations\\HasOne;');
+
+            const lines = [`class ${cls} extends Model`, '{', `    protected $table = '${t.name}';`];
+            if (!hasTimestamps) lines.push('    public $timestamps = false;');
+            lines.push('', `    protected $fillable = [${fillable.map((f) => `'${f}'`).join(', ')}];`);
+            if (casts.length) lines.push('', '    protected $casts = [', casts.join('\n'), '    ];');
+            if (methods.length) lines.push('', methods.join('\n\n'));
+            lines.push('}');
+
+            const content = `<?php\n\nnamespace App\\Models;\n\n${uses.join('\n')}\n\n${lines.join('\n')}\n`;
+            return { class: cls, content };
+        },
+
+        // Laravel-style migration filename stamp: YYYY_MM_DD_HHMMSS.
+        _migrationStamp() {
+            const d = new Date();
+            const p = (n, w = 2) => String(n).padStart(w, '0');
+            return `${d.getFullYear()}_${p(d.getMonth() + 1)}_${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+        },
+
+        // Bundle the migration + every model into a single .zip (real Laravel paths).
+        async _exportZip(migrationText) {
+            const zip = new JSZip();
+            zip.file(`database/migrations/${this._migrationStamp()}_create_schema_tables.php`, migrationText);
+            this.tables.forEach((t) => {
+                const m = this._modelFile(t);
+                zip.file(`app/Models/${m.class}.php`, m.content);
+            });
+            try {
+                const blob = await zip.generateAsync({ type: 'blob' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = (this.projectName || 'schema').replace(/\s+/g, '_').toLowerCase() + '_laravel.zip';
+                a.click();
+                URL.revokeObjectURL(a.href);
+                const n = this.tables.length;
+                this.toast(`Exported migration + ${n} model${n === 1 ? '' : 's'} (zip)`);
+            } catch (err) {
+                this.toast('Export failed: ' + err.message);
+            }
         },
 
         // ----- import -----
