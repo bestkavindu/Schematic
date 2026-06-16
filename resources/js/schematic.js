@@ -5,8 +5,13 @@
  * lines); the surrounding Livewire component handles persistence via $wire.save().
  */
 
+import JSZip from 'jszip';
+
 // ---------- static data (ported from the design's data.js) ----------
 const GEO = { CARD_W: 264, HEADER_H: 46, ROW_H: 34 };
+
+// Minimum drag-resize footprint for a group container.
+const GROUP_MIN_W = 220, GROUP_MIN_H = 150;
 
 const COLOR_KEYS = ['blue', 'green', 'purple', 'amber', 'red', 'teal', 'orange', 'pink'];
 
@@ -69,6 +74,9 @@ const uid = (p) => p + (_newId++);
 function blankColumn(name = 'column', type = 'string') {
     return { id: uid('c'), name, type, nullable: false, pk: false, unique: false, index: false, default: '', fk: null };
 }
+function blankGroup(x, y, color) {
+    return { id: uid('g'), name: 'New group', color: color || 'blue', x, y, w: 380, h: 280 };
+}
 function blankTable(x, y, color) {
     return {
         id: uid('t'), name: 'new_table', color: color || COLOR_KEYS[Math.floor(Math.random() * 8)],
@@ -105,6 +113,7 @@ const ICON_PATHS = {
     ChevronDown: '<path d="m6 9 6 6 6-6" />',
     ArrowUp: '<path d="M12 19V5M5 12l7-7 7 7" />',
     ArrowDown: '<path d="M12 5v14M5 12l7 7 7-7" />',
+    ArrowRight: '<path d="M5 12h14M13 5l7 7-7 7" />',
     Kebab: '<circle cx="12" cy="5" r="1.4" /><circle cx="12" cy="12" r="1.4" /><circle cx="12" cy="19" r="1.4" />',
     Table: '<rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M3 15h18M9 3v18" />',
     Key: '<circle cx="7.5" cy="15.5" r="4.5" /><path d="m10.5 12.5 7-7M16 4l3 3M14 6l3 3" />',
@@ -129,6 +138,7 @@ const ICON_PATHS = {
     Save: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><path d="M17 21v-8H7v8M7 3v5h8" />',
     Bell: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />',
     Star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26" />',
+    Group: '<rect x="3" y="3" width="8" height="8" rx="1.5" /><rect x="13" y="13" width="8" height="8" rx="1.5" /><path d="M13 7h4a2 2 0 0 1 2 2v2M11 17H7a2 2 0 0 1-2-2v-2" />',
 };
 function icon(name, opts = {}) {
     const size = opts.size || 16;
@@ -176,8 +186,12 @@ function schematicBuilder(initial) {
     return {
         projectName: initial.name || 'Untitled Schema',
         tables: clone(initial.tables || []),
+        groups: clone(initial.groups || []),
 
         selectedIds: [],
+        selectedGroupId: null,
+        groupRenamingId: null,
+        groupMenu: null,
         editorId: null,
         editorOpenCols: [],
         sidebarCollapsed: false,
@@ -220,8 +234,9 @@ function schematicBuilder(initial) {
             this.$watch('tweaks.accent', () => this.applyAccent());
             this.$watch('tweaks.radius', () => this.applyRadius());
             this.$watch('tables', () => { this.dirty = true; }, { deep: true });
+            this.$watch('groups', () => { this.dirty = true; }, { deep: true });
             this.$watch('projectName', () => { this.dirty = true; });
-            this.$nextTick(() => { if (this.tables.length) this.fitToScreen(); });
+            this.$nextTick(() => { if (this.tables.length || this.groups.length) this.fitToScreen(); });
         },
 
         // ----- tweaks -----
@@ -273,10 +288,11 @@ function schematicBuilder(initial) {
                     const bx = tx + tDir * 10, by = ty, barX = tx + tDir * 6;
                     out.push({
                         id: src.id + '.' + c.id, srcId: src.id, tgtId: tgt.id,
+                        type: c.fk.type || '1:N',
                         color: (this.palette[src.color] || this.palette.blue).bar,
                         path: relPath(ax, sy, bx, by, sDir, tDir),
                         footD: `M ${ax} ${sy} L ${sx} ${sy - 6} M ${ax} ${sy} L ${sx} ${sy} M ${ax} ${sy} L ${sx} ${sy + 6}`,
-                        sx, sy, tx, bx, by, barX,
+                        sx, sy, tx, bx, by, barX, srcBarX: sx + sDir * 6,
                     });
                 });
             });
@@ -294,9 +310,13 @@ function schematicBuilder(initial) {
                 const stroke = on ? r.color : '#cdcdd4';
                 const w = sel ? 2.6 : (on ? 2 : 1.5);
                 const cr = on ? 2.4 : 0;
+                // src end: single bar for 1:1 (one), crow's foot for 1:N / N:1 (many)
+                const srcEnd = r.type === '1:1'
+                    ? `<line x1="${r.srcBarX}" y1="${r.sy - 6}" x2="${r.srcBarX}" y2="${r.sy + 6}" stroke="${stroke}" stroke-width="${w}" stroke-linecap="round"></line>`
+                    : `<path d="${r.footD}" fill="none" stroke="${stroke}" stroke-width="${w}" stroke-linecap="round"></path>`;
                 return `<g opacity="${on ? 1 : 0.85}" style="transition:opacity .15s">`
                     + `<path d="${r.path}" fill="none" stroke="${stroke}" stroke-width="${w}"></path>`
-                    + `<path d="${r.footD}" fill="none" stroke="${stroke}" stroke-width="${w}" stroke-linecap="round"></path>`
+                    + srcEnd
                     + `<line x1="${r.barX}" y1="${r.by - 6}" x2="${r.barX}" y2="${r.by + 6}" stroke="${stroke}" stroke-width="${w}" stroke-linecap="round"></line>`
                     + `<line x1="${r.tx}" y1="${r.by}" x2="${r.bx}" y2="${r.by}" stroke="${stroke}" stroke-width="${w}"></line>`
                     + `<circle cx="${r.barX}" cy="${r.by}" r="${cr}" fill="${stroke}"></circle>`
@@ -383,8 +403,8 @@ function schematicBuilder(initial) {
         toggleExpand(id) {
             this.expanded = this.expanded.includes(id) ? this.expanded.filter((x) => x !== id) : [...this.expanded, id];
         },
-        selectOnly(id) { this.selectedIds = [id]; this.editorId = id; },
-        openEditor(id) { this.editorId = id; this.selectedIds = [id]; },
+        selectOnly(id) { this.selectedIds = [id]; this.editorId = id; this.selectedGroupId = null; },
+        openEditor(id) { this.editorId = id; this.selectedIds = [id]; this.selectedGroupId = null; },
         closeEditor() { this.editorId = null; },
 
         // ----- table ops -----
@@ -427,6 +447,96 @@ function schematicBuilder(initial) {
             this.tables = arr;
         },
         colorTable(id, color) { const t = this.tables.find((x) => x.id === id); if (t) t.color = color; },
+
+        // ----- groups (cosmetic containers) -----
+        groupColor(g) { return this.palette[g.color] || this.palette.blue; },
+        groupStyle(g) {
+            const c = this.groupColor(g);
+            return {
+                transform: `translate(${g.x}px, ${g.y}px)`,
+                width: g.w + 'px',
+                height: g.h + 'px',
+                background: c.tint,
+                borderColor: c.bar,
+            };
+        },
+        groupHeadStyle(g) {
+            const c = this.groupColor(g);
+            return { background: c.soft, color: c.text };
+        },
+        isGroupSelected(id) { return this.selectedGroupId === id; },
+        // Tables a group "owns" — those whose card center falls inside the group rect.
+        tablesInGroup(g) {
+            return this.tables.filter((t) => {
+                const cx = t.x + GEO.CARD_W / 2;
+                const cy = t.y + cardHeight(t) / 2;
+                return cx >= g.x && cx <= g.x + g.w && cy >= g.y && cy <= g.y + g.h;
+            });
+        },
+        addGroup(world) {
+            const w = world && typeof world === 'object'
+                ? world
+                : { x: (-this.view.tx + 360) / this.view.scale, y: (-this.view.ty + 200) / this.view.scale };
+            const g = blankGroup(Math.round(w.x), Math.round(w.y), COLOR_KEYS[this.groups.length % 8]);
+            this.groups.push(g);
+            this.selectedGroupId = g.id;
+            this.selectedIds = [];
+            this.toast('Group created');
+        },
+        // Wrap the currently-selected tables in a new group sized to their bounding box.
+        groupSelected() {
+            const sel = this.tables.filter((t) => this.selectedIds.includes(t.id));
+            if (!sel.length) { this.toast('Select tables to group first'); return; }
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            sel.forEach((t) => {
+                minX = Math.min(minX, t.x); minY = Math.min(minY, t.y);
+                maxX = Math.max(maxX, t.x + GEO.CARD_W); maxY = Math.max(maxY, t.y + cardHeight(t));
+            });
+            const padX = 28, padTop = 46, padBottom = 28;
+            const g = blankGroup(Math.round(minX - padX), Math.round(minY - padTop), COLOR_KEYS[this.groups.length % 8]);
+            g.w = Math.max(GROUP_MIN_W, Math.round((maxX - minX) + padX * 2));
+            g.h = Math.max(GROUP_MIN_H, Math.round((maxY - minY) + padTop + padBottom));
+            this.groups.push(g);
+            this.selectedGroupId = g.id;
+            this.toast(`Grouped ${sel.length} table${sel.length === 1 ? '' : 's'}`);
+        },
+        deleteGroup(id) {
+            this.groups = this.groups.filter((g) => g.id !== id);
+            if (this.selectedGroupId === id) this.selectedGroupId = null;
+            if (this.groupRenamingId === id) this.groupRenamingId = null;
+            this.groupMenu = null;
+            this.toast('Group deleted');
+        },
+        colorGroup(id, color) { const g = this.groups.find((x) => x.id === id); if (g) g.color = color; },
+        // Restore a sensible label if the inline rename was left blank.
+        renameGroupDone(g) { if (!g.name || !g.name.trim()) g.name = 'Untitled group'; this.groupRenamingId = null; },
+        groupMenuGroup() { return this.groupMenu ? this.groups.find((x) => x.id === this.groupMenu.id) : null; },
+        onGroupContext(e, id) {
+            this.selectedGroupId = id;
+            this.groupMenu = { x: e.clientX, y: e.clientY, id };
+        },
+        // Drag a group by its header — moves the group and every table inside it together.
+        onGroupHeadPointerDown(e, id) {
+            if (e.button !== 0) return;
+            e.stopPropagation();
+            const g = this.groups.find((x) => x.id === id);
+            if (!g) return;
+            this.selectedGroupId = id;
+            this.selectedIds = [];
+            this.editorId = null;
+            const members = this.tablesInGroup(g).map((t) => t.id);
+            const starts = {};
+            members.forEach((tid) => { const t = this.tables.find((x) => x.id === tid); if (t) starts[tid] = { x: t.x, y: t.y }; });
+            this._drag = { mode: 'group', id, members, starts, gStart: { x: g.x, y: g.y }, startX: e.clientX, startY: e.clientY, moved: false };
+        },
+        startGroupResize(e, id) {
+            if (e.button !== 0) return;
+            e.stopPropagation();
+            const g = this.groups.find((x) => x.id === id);
+            if (!g) return;
+            this.selectedGroupId = id;
+            this._drag = { mode: 'groupResize', id, wStart: g.w, hStart: g.h, startX: e.clientX, startY: e.clientY, moved: false };
+        },
 
         // ----- column ops -----
         addColumn(id) {
@@ -539,6 +649,7 @@ function schematicBuilder(initial) {
         stageStyle() { return { transform: `translate(${this.view.tx}px, ${this.view.ty}px) scale(${this.view.scale})` }; },
         zoom(delta) { this.view = { ...this.view, scale: Math.min(2.2, Math.max(0.25, this.view.scale + delta)) }; },
         onWheel(e) {
+            if (this._drag) return;   // don't rescale mid-drag — the in-flight delta is measured at the old scale
             const rect = this.$refs.wrap.getBoundingClientRect();
             const mx = e.clientX - rect.left, my = e.clientY - rect.top;
             let ns = e.ctrlKey || e.metaKey
@@ -550,12 +661,16 @@ function schematicBuilder(initial) {
         },
         fitToScreen() {
             const wrap = this.$refs.wrap;
-            if (!this.tables.length || !wrap) return;
+            if ((!this.tables.length && !this.groups.length) || !wrap) return;
             const W = GEO.CARD_W;
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
             this.tables.forEach((t) => {
                 minX = Math.min(minX, t.x); minY = Math.min(minY, t.y);
                 maxX = Math.max(maxX, t.x + W); maxY = Math.max(maxY, t.y + cardHeight(t));
+            });
+            this.groups.forEach((g) => {
+                minX = Math.min(minX, g.x); minY = Math.min(minY, g.y);
+                maxX = Math.max(maxX, g.x + g.w); maxY = Math.max(maxY, g.y + g.h);
             });
             const pad = 80, cw = wrap.clientWidth, ch = wrap.clientHeight;
             const bw = maxX - minX + pad * 2, bh = maxY - minY + pad * 2;
@@ -570,11 +685,12 @@ function schematicBuilder(initial) {
         // ----- pointer drag (pan + card move) -----
         onBgPointerDown(e) {
             if (e.button !== 0 && e.button !== 1) return;
-            if (e.target.closest('.card') || e.target.closest('.canvas-ctrls') || e.target.closest('.canvas-bar') || e.target.closest('.menu') || e.target.closest('[data-rel]')) return;
+            if (e.target.closest('.card') || e.target.closest('.canvas-ctrls') || e.target.closest('.canvas-bar') || e.target.closest('.menu') || e.target.closest('.rel-pop') || e.target.closest('[data-rel]')) return;
             this._drag = { mode: 'pan', startX: e.clientX, startY: e.clientY, tx: this.view.tx, ty: this.view.ty, moved: false };
             if (!e.shiftKey) this.selectedIds = [];
             this.selectedRelId = null;
             this.relMenu = null;
+            this.selectedGroupId = null;
         },
 
         // ----- relationship drag-to-connect -----
@@ -634,6 +750,7 @@ function schematicBuilder(initial) {
         onCardPointerDown(e, id) {
             if (e.button !== 0) return;
             e.stopPropagation();
+            this.selectedGroupId = null;   // selecting a table clears any group selection
             const onHead = !!e.target.closest('.card-head');
             let sel = [...this.selectedIds];
             if (e.shiftKey) sel = sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id];
@@ -658,6 +775,25 @@ function schematicBuilder(initial) {
                 return;
             }
             if (d.mode === 'pan') { this.view = { ...this.view, tx: d.tx + dx, ty: d.ty + dy }; return; }
+            if (d.mode === 'group') {
+                const sc = this.view.scale;
+                const g = this.groups.find((x) => x.id === d.id);
+                if (g) { g.x = d.gStart.x + dx / sc; g.y = d.gStart.y + dy / sc; }
+                d.members.forEach((tid) => {
+                    const t = this.tables.find((x) => x.id === tid);
+                    if (t) { t.x = d.starts[tid].x + dx / sc; t.y = d.starts[tid].y + dy / sc; }
+                });
+                return;
+            }
+            if (d.mode === 'groupResize') {
+                const sc = this.view.scale;
+                const g = this.groups.find((x) => x.id === d.id);
+                if (g) {
+                    g.w = Math.max(GROUP_MIN_W, d.wStart + dx / sc);
+                    g.h = Math.max(GROUP_MIN_H, d.hStart + dy / sc);
+                }
+                return;
+            }
             const sc = this.view.scale;
             d.ids.forEach((tid) => {
                 const t = this.tables.find((x) => x.id === tid);
@@ -705,6 +841,34 @@ function schematicBuilder(initial) {
         },
         clearRelSelection() { this.selectedRelId = null; this.relMenu = null; },
 
+        // Resolve the open relMenu into display data: parent (referenced) -> child (FK) + current type.
+        relMenuRel() {
+            if (!this.relMenu) return null;
+            const relId = this.relMenu.relId;
+            const dot = relId.indexOf('.');
+            const src = this.tables.find((t) => t.id === relId.slice(0, dot));
+            if (!src) return null;
+            const col = src.columns.find((c) => c.id === relId.slice(dot + 1));
+            if (!col || !col.fk) return null;
+            const tgt = this.tables.find((t) => t.id === col.fk.table);
+            const blue = this.palette.blue;
+            return {
+                col,
+                type: col.fk.type || '1:N',
+                parentName: tgt ? tgt.name : col.fk.table,
+                parentCol: col.fk.column,
+                parentColor: tgt ? (this.palette[tgt.color] || blue).bar : (this.palette.violet || blue).bar,
+                childName: src.name,
+                childCol: col.name,
+                childColor: (this.palette[src.color] || blue).bar,
+            };
+        },
+        // Change cardinality from the relationship popover.
+        setRelType(type) {
+            const info = this.relMenuRel();
+            if (info) this.setFkType(info.col, type);
+        },
+
         // ----- context menus -----
         onContext(e, id) {
             if (id && !this.selectedIds.includes(id)) this.selectedIds = [id];
@@ -714,8 +878,7 @@ function schematicBuilder(initial) {
             const r = e.currentTarget.getBoundingClientRect();
             this.sbMenu = { id, x: r.right - 188, y: r.bottom + 6 };
         },
-        menuStyle(m) {
-            const w = 200;
+        menuStyle(m, w = 200) {
             let left = m.x, top = m.y;
             if (left + w > window.innerWidth - 8) left = window.innerWidth - w - 8;
             if (top + 240 > window.innerHeight - 8) top = Math.max(8, m.y - 240);
@@ -733,6 +896,9 @@ function schematicBuilder(initial) {
         payload() {
             return JSON.parse(JSON.stringify({
                 name: this.projectName,
+                groups: this.groups.map((g) => ({
+                    id: g.id, name: g.name, color: g.color, x: g.x, y: g.y, w: g.w, h: g.h,
+                })),
                 tables: this.tables.map((t) => ({
                     id: t.id, name: t.name, color: t.color, x: t.x, y: t.y,
                     indexes: t.indexes || [],
@@ -863,8 +1029,111 @@ function schematicBuilder(initial) {
             });
             const body = blocks.join('\n\n');
             const text = `<?php\n\nuse Illuminate\\Database\\Migrations\\Migration;\nuse Illuminate\\Database\\Schema\\Blueprint;\nuse Illuminate\\Support\\Facades\\Schema;\n\nreturn new class extends Migration\n{\n    public function up(): void\n    {\n${body}\n    }\n\n    public function down(): void\n    {\n${this.tables.slice().reverse().map((t) => `        Schema::dropIfExists('${t.name}');`).join('\n')}\n    }\n};\n`;
-            this._download(text, '_migration.php', 'text/plain');
-            this.toast('Exported Laravel migration');
+            this._exportZip(text);
+        },
+
+        // ----- Eloquent model export -----
+        // StudlyCase, e.g. blog_posts -> BlogPosts
+        _studly(s) {
+            return String(s).split(/[^a-zA-Z0-9]+/).filter(Boolean)
+                .map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join('');
+        },
+        // Naive singularizer good enough for table -> model names.
+        _singular(s) {
+            const w = String(s);
+            if (/ies$/i.test(w)) return w.replace(/ies$/i, 'y');
+            if (/(ses|xes|zes|ches|shes)$/i.test(w)) return w.replace(/es$/i, '');
+            if (/ss$/i.test(w)) return w;
+            if (/s$/i.test(w)) return w.replace(/s$/i, '');
+            return w;
+        },
+        _camel(s) { const st = this._studly(s); return st.charAt(0).toLowerCase() + st.slice(1); },
+        _modelClass(table) { return this._studly(this._singular(table)); },
+
+        // Build a complete app/Models/<Class>.php file for one table.
+        _modelFile(t) {
+            const CAST = { boolean: 'boolean', json: 'array', date: 'date', datetime: 'datetime', timestamp: 'datetime', decimal: 'decimal:2', float: 'float' };
+            const skip = new Set(['id', 'created_at', 'updated_at', 'deleted_at']);
+            const cls = this._modelClass(t.name);
+            const hasTimestamps = t.columns.some((c) => c.name === 'created_at') && t.columns.some((c) => c.name === 'updated_at');
+
+            const fillable = t.columns.filter((c) => !c.pk && !skip.has(c.name)).map((c) => c.name);
+            const casts = t.columns
+                .filter((c) => CAST[c.type] && !skip.has(c.name))
+                .map((c) => `        '${c.name}' => '${CAST[c.type]}',`);
+
+            const relUses = new Set();
+            const methods = [];
+            // belongsTo for every FK column on this table
+            t.columns.filter((c) => c.fk).forEach((c) => {
+                const tgt = this.tables.find((x) => x.id === c.fk.table);
+                if (!tgt) return;
+                relUses.add('BelongsTo');
+                const name = this._camel(this._singular(tgt.name));
+                let args = `${this._modelClass(tgt.name)}::class`;
+                if (c.fk.column && c.fk.column !== 'id') args += `, '${c.name}', '${c.fk.column}'`;
+                else if (c.name !== name + '_id') args += `, '${c.name}'`;
+                methods.push(`    public function ${name}(): BelongsTo\n    {\n        return $this->belongsTo(${args});\n    }`);
+            });
+            // hasMany / hasOne for FK columns on other tables that point here
+            this.tables.forEach((ot) => {
+                ot.columns.filter((c) => c.fk && c.fk.table === t.id).forEach((c) => {
+                    const owning = this._modelClass(ot.name);
+                    if (c.fk.type === '1:1') {
+                        relUses.add('HasOne');
+                        const name = this._camel(this._singular(ot.name));
+                        methods.push(`    public function ${name}(): HasOne\n    {\n        return $this->hasOne(${owning}::class, '${c.name}');\n    }`);
+                    } else {
+                        relUses.add('HasMany');
+                        const name = this._camel(ot.name);
+                        methods.push(`    public function ${name}(): HasMany\n    {\n        return $this->hasMany(${owning}::class, '${c.name}');\n    }`);
+                    }
+                });
+            });
+
+            const uses = ['use Illuminate\\Database\\Eloquent\\Model;'];
+            if (relUses.has('BelongsTo')) uses.push('use Illuminate\\Database\\Eloquent\\Relations\\BelongsTo;');
+            if (relUses.has('HasMany')) uses.push('use Illuminate\\Database\\Eloquent\\Relations\\HasMany;');
+            if (relUses.has('HasOne')) uses.push('use Illuminate\\Database\\Eloquent\\Relations\\HasOne;');
+
+            const lines = [`class ${cls} extends Model`, '{', `    protected $table = '${t.name}';`];
+            if (!hasTimestamps) lines.push('    public $timestamps = false;');
+            lines.push('', `    protected $fillable = [${fillable.map((f) => `'${f}'`).join(', ')}];`);
+            if (casts.length) lines.push('', '    protected $casts = [', casts.join('\n'), '    ];');
+            if (methods.length) lines.push('', methods.join('\n\n'));
+            lines.push('}');
+
+            const content = `<?php\n\nnamespace App\\Models;\n\n${uses.join('\n')}\n\n${lines.join('\n')}\n`;
+            return { class: cls, content };
+        },
+
+        // Laravel-style migration filename stamp: YYYY_MM_DD_HHMMSS.
+        _migrationStamp() {
+            const d = new Date();
+            const p = (n, w = 2) => String(n).padStart(w, '0');
+            return `${d.getFullYear()}_${p(d.getMonth() + 1)}_${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+        },
+
+        // Bundle the migration + every model into a single .zip (real Laravel paths).
+        async _exportZip(migrationText) {
+            const zip = new JSZip();
+            zip.file(`database/migrations/${this._migrationStamp()}_create_schema_tables.php`, migrationText);
+            this.tables.forEach((t) => {
+                const m = this._modelFile(t);
+                zip.file(`app/Models/${m.class}.php`, m.content);
+            });
+            try {
+                const blob = await zip.generateAsync({ type: 'blob' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = (this.projectName || 'schema').replace(/\s+/g, '_').toLowerCase() + '_laravel.zip';
+                a.click();
+                URL.revokeObjectURL(a.href);
+                const n = this.tables.length;
+                this.toast(`Exported migration + ${n} model${n === 1 ? '' : 's'} (zip)`);
+            } catch (err) {
+                this.toast('Export failed: ' + err.message);
+            }
         },
 
         // ----- import -----

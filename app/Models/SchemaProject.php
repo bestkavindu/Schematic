@@ -16,6 +16,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Collection<int, SchemaTable> $tables
+ * @property-read Collection<int, SchemaGroup> $groups
  */
 class SchemaProject extends Model
 {
@@ -39,5 +40,13 @@ class SchemaProject extends Model
     public function tables(): HasMany
     {
         return $this->hasMany(SchemaTable::class)->orderBy('sort');
+    }
+
+    /**
+     * @return HasMany<SchemaGroup, $this>
+     */
+    public function groups(): HasMany
+    {
+        return $this->hasMany(SchemaGroup::class)->orderBy('sort');
     }
 }
