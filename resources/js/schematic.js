@@ -113,6 +113,7 @@ const ICON_PATHS = {
     ChevronDown: '<path d="m6 9 6 6 6-6" />',
     ArrowUp: '<path d="M12 19V5M5 12l7-7 7 7" />',
     ArrowDown: '<path d="M12 5v14M5 12l7 7 7-7" />',
+    ArrowRight: '<path d="M5 12h14M13 5l7 7-7 7" />',
     Kebab: '<circle cx="12" cy="5" r="1.4" /><circle cx="12" cy="12" r="1.4" /><circle cx="12" cy="19" r="1.4" />',
     Table: '<rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M3 15h18M9 3v18" />',
     Key: '<circle cx="7.5" cy="15.5" r="4.5" /><path d="m10.5 12.5 7-7M16 4l3 3M14 6l3 3" />',
@@ -287,10 +288,11 @@ function schematicBuilder(initial) {
                     const bx = tx + tDir * 10, by = ty, barX = tx + tDir * 6;
                     out.push({
                         id: src.id + '.' + c.id, srcId: src.id, tgtId: tgt.id,
+                        type: c.fk.type || '1:N',
                         color: (this.palette[src.color] || this.palette.blue).bar,
                         path: relPath(ax, sy, bx, by, sDir, tDir),
                         footD: `M ${ax} ${sy} L ${sx} ${sy - 6} M ${ax} ${sy} L ${sx} ${sy} M ${ax} ${sy} L ${sx} ${sy + 6}`,
-                        sx, sy, tx, bx, by, barX,
+                        sx, sy, tx, bx, by, barX, srcBarX: sx + sDir * 6,
                     });
                 });
             });
@@ -308,9 +310,13 @@ function schematicBuilder(initial) {
                 const stroke = on ? r.color : '#cdcdd4';
                 const w = sel ? 2.6 : (on ? 2 : 1.5);
                 const cr = on ? 2.4 : 0;
+                // src end: single bar for 1:1 (one), crow's foot for 1:N / N:1 (many)
+                const srcEnd = r.type === '1:1'
+                    ? `<line x1="${r.srcBarX}" y1="${r.sy - 6}" x2="${r.srcBarX}" y2="${r.sy + 6}" stroke="${stroke}" stroke-width="${w}" stroke-linecap="round"></line>`
+                    : `<path d="${r.footD}" fill="none" stroke="${stroke}" stroke-width="${w}" stroke-linecap="round"></path>`;
                 return `<g opacity="${on ? 1 : 0.85}" style="transition:opacity .15s">`
                     + `<path d="${r.path}" fill="none" stroke="${stroke}" stroke-width="${w}"></path>`
-                    + `<path d="${r.footD}" fill="none" stroke="${stroke}" stroke-width="${w}" stroke-linecap="round"></path>`
+                    + srcEnd
                     + `<line x1="${r.barX}" y1="${r.by - 6}" x2="${r.barX}" y2="${r.by + 6}" stroke="${stroke}" stroke-width="${w}" stroke-linecap="round"></line>`
                     + `<line x1="${r.tx}" y1="${r.by}" x2="${r.bx}" y2="${r.by}" stroke="${stroke}" stroke-width="${w}"></line>`
                     + `<circle cx="${r.barX}" cy="${r.by}" r="${cr}" fill="${stroke}"></circle>`
@@ -679,7 +685,7 @@ function schematicBuilder(initial) {
         // ----- pointer drag (pan + card move) -----
         onBgPointerDown(e) {
             if (e.button !== 0 && e.button !== 1) return;
-            if (e.target.closest('.card') || e.target.closest('.canvas-ctrls') || e.target.closest('.canvas-bar') || e.target.closest('.menu') || e.target.closest('[data-rel]')) return;
+            if (e.target.closest('.card') || e.target.closest('.canvas-ctrls') || e.target.closest('.canvas-bar') || e.target.closest('.menu') || e.target.closest('.rel-pop') || e.target.closest('[data-rel]')) return;
             this._drag = { mode: 'pan', startX: e.clientX, startY: e.clientY, tx: this.view.tx, ty: this.view.ty, moved: false };
             if (!e.shiftKey) this.selectedIds = [];
             this.selectedRelId = null;
@@ -835,6 +841,34 @@ function schematicBuilder(initial) {
         },
         clearRelSelection() { this.selectedRelId = null; this.relMenu = null; },
 
+        // Resolve the open relMenu into display data: parent (referenced) -> child (FK) + current type.
+        relMenuRel() {
+            if (!this.relMenu) return null;
+            const relId = this.relMenu.relId;
+            const dot = relId.indexOf('.');
+            const src = this.tables.find((t) => t.id === relId.slice(0, dot));
+            if (!src) return null;
+            const col = src.columns.find((c) => c.id === relId.slice(dot + 1));
+            if (!col || !col.fk) return null;
+            const tgt = this.tables.find((t) => t.id === col.fk.table);
+            const blue = this.palette.blue;
+            return {
+                col,
+                type: col.fk.type || '1:N',
+                parentName: tgt ? tgt.name : col.fk.table,
+                parentCol: col.fk.column,
+                parentColor: tgt ? (this.palette[tgt.color] || blue).bar : (this.palette.violet || blue).bar,
+                childName: src.name,
+                childCol: col.name,
+                childColor: (this.palette[src.color] || blue).bar,
+            };
+        },
+        // Change cardinality from the relationship popover.
+        setRelType(type) {
+            const info = this.relMenuRel();
+            if (info) this.setFkType(info.col, type);
+        },
+
         // ----- context menus -----
         onContext(e, id) {
             if (id && !this.selectedIds.includes(id)) this.selectedIds = [id];
@@ -844,8 +878,7 @@ function schematicBuilder(initial) {
             const r = e.currentTarget.getBoundingClientRect();
             this.sbMenu = { id, x: r.right - 188, y: r.bottom + 6 };
         },
-        menuStyle(m) {
-            const w = 200;
+        menuStyle(m, w = 200) {
             let left = m.x, top = m.y;
             if (left + w > window.innerWidth - 8) left = window.innerWidth - w - 8;
             if (top + 240 > window.innerHeight - 8) top = Math.max(8, m.y - 240);

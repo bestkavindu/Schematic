@@ -342,10 +342,33 @@
 
             {{-- relationship line popover --}}
             <template x-if="relMenu">
-                <div class="menu" :style="menuStyle(relMenu)" @pointerdown.outside="relMenu = null" @keydown.escape.window="relMenu = null">
-                    <button class="menu-item danger" @click="deleteRel(relMenu.relId)">
-                        <span x-html="icon('Trash', { size: 15 })" style="display:flex"></span><span>Delete relationship</span>
-                    </button>
+                <div class="rel-pop" x-data="{ r: relMenuRel() }" :style="menuStyle(relMenu, 270)"
+                     @pointerdown.outside="relMenu = null" @keydown.escape.window="relMenu = null">
+                    <template x-if="r">
+                        <div>
+                            <div class="rel-pop-tables">
+                                <div class="rel-chip">
+                                    <span class="rel-chip-head"><span class="rel-dot" :style="'background:' + r.parentColor"></span><span x-text="r.parentName"></span></span>
+                                    <span class="rel-chip-col" x-text="r.parentCol"></span>
+                                </div>
+                                <span class="rel-arrow" x-html="icon('ArrowRight', { size: 16 })"></span>
+                                <div class="rel-chip">
+                                    <span class="rel-chip-head"><span class="rel-dot" :style="'background:' + r.childColor"></span><span x-text="r.childName"></span></span>
+                                    <span class="rel-chip-col" x-text="r.childCol"></span>
+                                </div>
+                            </div>
+                            <div class="rel-pop-foot">
+                                <div class="rel-seg">
+                                    <template x-for="t in ['1:1', '1:N', 'N:1']" :key="t">
+                                        <button class="rel-seg-btn" :class="{ on: r.type === t }"
+                                                @click="setRelType(t); r = relMenuRel()" x-text="t"></button>
+                                    </template>
+                                </div>
+                                <button class="rel-del" title="Delete relationship" @click="deleteRel(relMenu.relId)"
+                                        x-html="icon('Trash', { size: 15 })"></button>
+                            </div>
+                        </div>
+                    </template>
                 </div>
             </template>
 
