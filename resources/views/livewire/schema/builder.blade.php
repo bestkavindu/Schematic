@@ -45,13 +45,19 @@
                         <button class="menu-item" @click="exportMigration(); exportMenu = false">
                             <span x-html="icon('Layout', { size: 15 })" style="display:flex"></span><span style="flex:1">Laravel migration + models (.zip)</span>
                         </button>
+                        <button class="menu-item" @click="exportJson(); exportMenu = false">
+                            <span x-html="icon('Download', { size: 15 })" style="display:flex"></span><span style="flex:1">Export JSON</span>
+                        </button>
+                        <button class="menu-item" @click="exportDbml(); exportMenu = false">
+                            <span x-html="icon('Database', { size: 15 })" style="display:flex"></span><span style="flex:1">Export DBML</span>
+                        </button>
                         <div class="menu-sep"></div>
                         <button class="menu-item" @click="triggerImport()">
-                            <span x-html="icon('Upload', { size: 15 })" style="display:flex"></span><span style="flex:1">Import SQL</span>
+                            <span x-html="icon('Upload', { size: 15 })" style="display:flex"></span><span style="flex:1">Import SQL / JSON</span>
                         </button>
                     </div>
                 </template>
-                <input type="file" accept=".sql,text/sql,text/plain" x-ref="importFile" @change="importFile($event)" style="display:none" />
+                <input type="file" accept=".sql,.json,text/sql,application/json,text/plain" x-ref="importFile" @change="importFile($event)" style="display:none" />
             </div>
         </div>
         <div class="nav-divider"></div>
@@ -342,11 +348,13 @@
 
             {{-- relationship line popover --}}
             <template x-if="relMenu">
-                <div class="rel-pop" x-data="{ r: relMenuRel() }" :style="menuStyle(relMenu, 270)"
+                <div class="rel-pop" x-data="{ r: relMenuRel() }" :style="relPopStyle(relMenu)"
                      @pointerdown.outside="relMenu = null" @keydown.escape.window="relMenu = null">
                     <template x-if="r">
                         <div>
-                            <div class="rel-pop-tables">
+                            <div class="rel-pop-tables" @pointerdown="startRelMenuDrag($event)"
+                                 :style="'touch-action:none;cursor:' + (relMenuDragging ? 'grabbing' : 'grab')"
+                                 title="Drag to move">
                                 <div class="rel-chip">
                                     <span class="rel-chip-head"><span class="rel-dot" :style="'background:' + r.parentColor"></span><span x-text="r.parentName"></span></span>
                                     <span class="rel-chip-col" x-text="r.parentCol"></span>

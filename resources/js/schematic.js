@@ -222,6 +222,7 @@ function schematicBuilder(initial) {
         linkDraft: null,
         selectedRelId: null,
         relMenu: null,
+        relMenuDragging: false,
 
         colorKeys: COLOR_KEYS,
         types: LARAVEL_TYPES,
@@ -884,6 +885,40 @@ function schematicBuilder(initial) {
             if (top + 240 > window.innerHeight - 8) top = Math.max(8, m.y - 240);
             return { left: left + 'px', top: top + 'px' };
         },
+        // Position the relationship popover. Before it's dragged we keep it fully
+        // on-screen (flipping up near the bottom); once the user moves it we honour
+        // the dragged spot and only keep a sliver on-screen so it can't be lost.
+        relPopStyle(m, w = 270) {
+            let left = m.x, top = m.y;
+            if (m.moved) {
+                left = Math.min(Math.max(left, 8), window.innerWidth - 60);
+                top = Math.min(Math.max(top, 8), window.innerHeight - 44);
+            } else {
+                if (left + w > window.innerWidth - 8) left = window.innerWidth - w - 8;
+                if (top + 150 > window.innerHeight - 8) top = Math.max(8, m.y - 150);
+            }
+            return { left: left + 'px', top: top + 'px' };
+        },
+        // Drag the relationship popover by its header so it can be moved off a table.
+        startRelMenuDrag(e) {
+            if (!this.relMenu || (e.target && e.target.closest('button'))) return;
+            e.preventDefault();
+            const startX = e.clientX, startY = e.clientY;
+            const ox = this.relMenu.x, oy = this.relMenu.y;
+            this.relMenuDragging = true;
+            const move = (ev) => {
+                this.relMenu.x = ox + (ev.clientX - startX);
+                this.relMenu.y = oy + (ev.clientY - startY);
+                this.relMenu.moved = true;
+            };
+            const up = () => {
+                this.relMenuDragging = false;
+                window.removeEventListener('pointermove', move);
+                window.removeEventListener('pointerup', up);
+            };
+            window.addEventListener('pointermove', move);
+            window.addEventListener('pointerup', up);
+        },
 
         // ----- toast -----
         toast(msg) {
@@ -1031,6 +1066,63 @@ function schematicBuilder(initial) {
             const text = `<?php\n\nuse Illuminate\\Database\\Migrations\\Migration;\nuse Illuminate\\Database\\Schema\\Blueprint;\nuse Illuminate\\Support\\Facades\\Schema;\n\nreturn new class extends Migration\n{\n    public function up(): void\n    {\n${body}\n    }\n\n    public function down(): void\n    {\n${this.tables.slice().reverse().map((t) => `        Schema::dropIfExists('${t.name}');`).join('\n')}\n    }\n};\n`;
             this._exportZip(text);
         },
+        // Native JSON export — the exact canvas payload, re-importable losslessly
+        // (positions, colors, groups, FK metadata all round-trip).
+        exportJson() {
+            this._download(JSON.stringify(this.payload(), null, 2), '.json', 'application/json');
+            this.toast('Exported schema.json');
+        },
+        // DBML export — dbdiagram.io-compatible: Table blocks, standalone Refs for
+        // foreign keys, and TableGroup blocks from the canvas's geometric groups.
+        exportDbml() {
+            const DBML_TYPE = {
+                id: 'bigint', bigInteger: 'bigint', unsignedBigInteger: 'bigint', integer: 'int',
+                string: 'varchar', text: 'text', boolean: 'boolean', date: 'date', datetime: 'datetime',
+                timestamp: 'timestamp', json: 'json', decimal: 'decimal', float: 'float', uuid: 'uuid',
+            };
+            // Quote identifiers that aren't simple words (DBML allows "two words").
+            const ident = (s) => /^[A-Za-z_]\w*$/.test(s) ? s : '"' + String(s).replace(/"/g, '\\"') + '"';
+            const fmtDefault = (v) => {
+                const s = String(v);
+                if (/^-?\d+(\.\d+)?$/.test(s)) return s;
+                if (/^(true|false|null)$/i.test(s)) return s.toLowerCase();
+                return "'" + s.replace(/'/g, "\\'") + "'";
+            };
+            const lines = [];
+            this.tables.forEach((t) => {
+                lines.push(`Table ${ident(t.name)} {`);
+                t.columns.forEach((c) => {
+                    const settings = [];
+                    if (c.pk) settings.push('pk');
+                    if (c.type === 'id') settings.push('increment');
+                    if (c.unique && !c.pk) settings.push('unique');
+                    if (!c.nullable && !c.pk) settings.push('not null');
+                    if (c.default !== '' && c.default != null) settings.push('default: ' + fmtDefault(c.default));
+                    const set = settings.length ? ` [${settings.join(', ')}]` : '';
+                    lines.push(`  ${ident(c.name)} ${DBML_TYPE[c.type] || 'varchar'}${set}`);
+                });
+                lines.push('}', '');
+            });
+            // Foreign keys as standalone Refs: child.col > parent.col (- for 1:1).
+            this.tables.forEach((t) => {
+                t.columns.filter((c) => c.fk).forEach((c) => {
+                    const tgt = this.tables.find((x) => x.id === c.fk.table);
+                    if (!tgt) return;
+                    const op = c.fk.type === '1:1' ? '-' : '>';
+                    lines.push(`Ref: ${ident(t.name)}.${ident(c.name)} ${op} ${ident(tgt.name)}.${ident(c.fk.column || 'id')}`);
+                });
+            });
+            // Groups -> TableGroup, by the same center-in-rect membership the canvas uses.
+            this.groups.forEach((g) => {
+                const members = this.tablesInGroup(g);
+                if (!members.length) return;
+                lines.push('', `TableGroup ${ident(g.name)} {`);
+                members.forEach((t) => lines.push(`  ${ident(t.name)}`));
+                lines.push('}');
+            });
+            this._download(lines.join('\n').replace(/\n+$/, '\n'), '.dbml', 'text/plain');
+            this.toast('Exported schema.dbml');
+        },
 
         // ----- Eloquent model export -----
         // StudlyCase, e.g. blog_posts -> BlogPosts
@@ -1143,12 +1235,16 @@ function schematicBuilder(initial) {
             const el = this.$refs.importFile;
             if (el) { el.value = ''; el.click(); }
         },
-        // Read the chosen .sql file and hand its text to the parser.
+        // Read the chosen file and route it by extension: .json restores a
+        // Schematic export, anything else is parsed as SQL CREATE TABLE.
         importFile(e) {
             const file = e.target.files && e.target.files[0];
             if (!file) return;
+            const isJson = /\.json$/i.test(file.name) || file.type === 'application/json';
             const reader = new FileReader();
-            reader.onload = () => this.importSql(reader.result || '');
+            reader.onload = () => isJson
+                ? this.importJson(reader.result || '')
+                : this.importSql(reader.result || '');
             reader.onerror = () => this.toast('Could not read file');
             reader.readAsText(file);
         },
@@ -1195,6 +1291,82 @@ function schematicBuilder(initial) {
             this.tables = [...this.tables, ...imported];
             this.$nextTick(() => this.fitToScreen());
             this.toast(`Imported ${imported.length} table${imported.length === 1 ? '' : 's'}`);
+        },
+        // Restore a project exported via exportJson(). Regenerates client ids so
+        // it merges cleanly, re-links FKs, and (when the canvas already has
+        // content) shifts the imported set below it without overlap.
+        importJson(text) {
+            let data;
+            try { data = JSON.parse(text); }
+            catch { this.toast('Import failed: invalid JSON'); return; }
+
+            const tablesIn = Array.isArray(data && data.tables) ? data.tables.filter(Boolean) : null;
+            if (!tablesIn) { this.toast('Not a Schematic JSON export'); return; }
+
+            const empty = !this.tables.length && !this.groups.length;
+
+            // Fresh table ids; FK columns reference a table by id, so build a remap.
+            const idMap = {};
+            tablesIn.forEach((t) => { if (t && t.id != null) idMap[t.id] = uid('t'); });
+
+            const tables = tablesIn.map((t, i) => ({
+                id: idMap[t.id] || uid('t'),
+                name: String((t && t.name) || 'table_' + (i + 1)),
+                color: COLOR_KEYS.includes(t && t.color) ? t.color : COLOR_KEYS[i % COLOR_KEYS.length],
+                x: Number.isFinite(t && t.x) ? t.x : 80,
+                y: Number.isFinite(t && t.y) ? t.y : 80,
+                indexes: Array.isArray(t && t.indexes) ? t.indexes : [],
+                columns: (Array.isArray(t && t.columns) ? t.columns : []).map((c) => {
+                    const col = blankColumn(String((c && c.name) || 'column'), String((c && c.type) || 'string'));
+                    col.nullable = !!c.nullable; col.pk = !!c.pk;
+                    col.unique = !!c.unique; col.index = !!c.index;
+                    col.default = c.default != null ? String(c.default) : '';
+                    // FK target table is a client id — remap it; drop if it points outside this import.
+                    if (c.fk && c.fk.table != null && idMap[c.fk.table]) {
+                        col.fk = {
+                            table: idMap[c.fk.table],
+                            column: c.fk.column || 'id',
+                            type: c.fk.type === '1:1' ? '1:1' : '1:N',
+                            onDelete: c.fk.onDelete || (c.nullable ? 'set null' : 'cascade'),
+                            onUpdate: c.fk.onUpdate || 'no action',
+                        };
+                    }
+                    return col;
+                }),
+            }));
+
+            const groups = (Array.isArray(data.groups) ? data.groups.filter(Boolean) : []).map((g, i) => ({
+                id: uid('g'),
+                name: String((g && g.name) || 'Group'),
+                color: COLOR_KEYS.includes(g && g.color) ? g.color : COLOR_KEYS[i % COLOR_KEYS.length],
+                x: Number.isFinite(g && g.x) ? g.x : 80,
+                y: Number.isFinite(g && g.y) ? g.y : 80,
+                w: Number.isFinite(g && g.w) ? g.w : 380,
+                h: Number.isFinite(g && g.h) ? g.h : 280,
+            }));
+
+            if (!tables.length && !groups.length) { this.toast('Nothing to import'); return; }
+
+            if (!empty) {
+                // Shift the whole imported set below existing content, layout intact.
+                const items = [...tables, ...groups];
+                const minY = Math.min(...items.map((it) => it.y));
+                const baseY = Math.max(
+                    ...this.tables.map((t) => t.y + cardHeight(t)),
+                    ...this.groups.map((g) => g.y + g.h),
+                    0,
+                ) + 60;
+                const dy = baseY - minY;
+                tables.forEach((t) => { t.y += dy; });
+                groups.forEach((g) => { g.y += dy; });
+            } else if (data.name) {
+                this.projectName = String(data.name);
+            }
+
+            this.tables = [...this.tables, ...tables];
+            this.groups = [...this.groups, ...groups];
+            this.$nextTick(() => this.fitToScreen());
+            this.toast(`Imported ${tables.length} table${tables.length === 1 ? '' : 's'} from JSON`);
         },
     };
 }
