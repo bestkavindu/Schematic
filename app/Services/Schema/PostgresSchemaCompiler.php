@@ -14,8 +14,10 @@ namespace App\Services\Schema;
  *   3. CREATE INDEX IF NOT EXISTS
  *
  * All tables are created before any foreign key is added, so table ordering and
- * circular / self-referential relationships never fail. Pure: no DB access, so
- * it is unit-testable as plain string output.
+ * circular / self-referential relationships never fail. A foreign-key column is
+ * emitted with the type of the column it references, and relationships whose
+ * target is not a primary key / unique column (which Postgres cannot reference)
+ * are skipped — see unsupportedRelationships(). Pure: no DB access.
  */
 final class PostgresSchemaCompiler
 {
@@ -46,33 +48,16 @@ final class PostgresSchemaCompiler
     public function compile(array $schema): array
     {
         $tables = array_values($schema['tables'] ?? []);
-
-        // Pass 0 — fk.table holds the target table's client_id. Map client_id -> real
-        // name, and record each table's column types so a FK column can be emitted with
-        // the SAME type as the column it references (Postgres rejects mismatched FKs).
-        $nameByClientId = [];
-        $typesByClientId = [];
-        foreach ($tables as $table) {
-            $name = (string) ($table['name'] ?? '');
-            PostgresIdentifier::assertValid($name, 'table name');
-            $clientId = (string) ($table['id'] ?? '');
-            $nameByClientId[$clientId] = $name;
-
-            $columnTypes = [];
-            foreach (($table['columns'] ?? []) as $column) {
-                $columnTypes[(string) ($column['name'] ?? '')] = (string) ($column['type'] ?? '');
-            }
-            $typesByClientId[$clientId] = $columnTypes;
-        }
+        $meta = $this->buildMeta($tables);
 
         $create = [];
         foreach ($tables as $table) {
-            $create[] = $this->createTable($table, $typesByClientId);
+            $create[] = $this->createTable($table, $meta);
         }
 
         $foreignKeys = [];
         foreach ($tables as $table) {
-            array_push($foreignKeys, ...$this->foreignKeys($table, $nameByClientId));
+            array_push($foreignKeys, ...$this->foreignKeys($table, $meta));
         }
 
         $indexes = [];
@@ -84,10 +69,72 @@ final class PostgresSchemaCompiler
     }
 
     /**
-     * @param  array<string, mixed>  $table
-     * @param  array<string, array<string, string>>  $typesByClientId  client_id => [column name => type]
+     * Human-readable warnings for relationships that cannot be created in
+     * Postgres (target table/column missing, or the target column is not a
+     * primary key / unique). These are skipped by compile() rather than failing.
+     *
+     * @param  array{name?: string, tables?: array<int, array<string, mixed>>}  $schema
+     * @return list<string>
      */
-    private function createTable(array $table, array $typesByClientId): string
+    public function unsupportedRelationships(array $schema): array
+    {
+        $tables = array_values($schema['tables'] ?? []);
+        $meta = $this->buildMeta($tables);
+
+        $warnings = [];
+        foreach ($tables as $table) {
+            foreach (($table['columns'] ?? []) as $column) {
+                $fk = $column['fk'] ?? null;
+                if (! is_array($fk) || empty($fk['table'])) {
+                    continue;
+                }
+                if ($this->resolveFk($fk, $meta) !== null) {
+                    continue; // valid — will be created
+                }
+
+                $targetTable = $meta[(string) $fk['table']]['name'] ?? '(unknown table)';
+                $targetColumn = (string) ($fk['column'] ?? 'id');
+                $warnings[] = "{$table['name']}.{$column['name']} → {$targetTable}.{$targetColumn} "
+                    .'(target column must be a primary key or unique)';
+            }
+        }
+
+        return $warnings;
+    }
+
+    /**
+     * Index each table by its client_id, capturing the real name and, per column,
+     * its type and whether it is a valid FK target (primary key or unique).
+     *
+     * @param  list<array<string, mixed>>  $tables
+     * @return array<string, array{name: string, columns: array<string, array{type: string, key: bool}>}>
+     */
+    private function buildMeta(array $tables): array
+    {
+        $meta = [];
+        foreach ($tables as $table) {
+            $name = (string) ($table['name'] ?? '');
+            PostgresIdentifier::assertValid($name, 'table name');
+
+            $columns = [];
+            foreach (($table['columns'] ?? []) as $column) {
+                $columns[(string) ($column['name'] ?? '')] = [
+                    'type' => (string) ($column['type'] ?? ''),
+                    'key' => ! empty($column['pk']) || ! empty($column['unique']),
+                ];
+            }
+
+            $meta[(string) ($table['id'] ?? '')] = ['name' => $name, 'columns' => $columns];
+        }
+
+        return $meta;
+    }
+
+    /**
+     * @param  array<string, mixed>  $table
+     * @param  array<string, array{name: string, columns: array<string, array{type: string, key: bool}>}>  $meta
+     */
+    private function createTable(array $table, array $meta): string
     {
         $name = (string) $table['name'];
         $lines = [];
@@ -97,7 +144,7 @@ final class PostgresSchemaCompiler
             $colName = (string) ($column['name'] ?? '');
             PostgresIdentifier::assertValid($colName, 'column name');
 
-            $type = $this->columnType($column, $typesByClientId);
+            $type = $this->columnType($column, $meta);
             $line = '    '.PostgresIdentifier::quote($colName).' '.$type;
             $line .= empty($column['nullable']) ? ' NOT NULL' : ' NULL';
 
@@ -129,19 +176,16 @@ final class PostgresSchemaCompiler
      * The SQL type for a column. A foreign-key column is emitted with the type of
      * the column it references (an `id`/serial PK is referenced as plain BIGINT),
      * so the constraint's key types always match. Falls back to the column's own
-     * declared type when the target cannot be resolved.
+     * declared type when the FK target cannot be resolved.
      *
      * @param  array<string, mixed>  $column
-     * @param  array<string, array<string, string>>  $typesByClientId
+     * @param  array<string, array{name: string, columns: array<string, array{type: string, key: bool}>}>  $meta
      */
-    private function columnType(array $column, array $typesByClientId): string
+    private function columnType(array $column, array $meta): string
     {
-        $fk = $column['fk'] ?? null;
-        if (is_array($fk) && ! empty($fk['table'])) {
-            $refType = $typesByClientId[(string) $fk['table']][(string) ($fk['column'] ?? 'id')] ?? null;
-            if ($refType !== null) {
-                return $this->referenceType($refType);
-            }
+        $target = $this->resolveFk($column['fk'] ?? null, $meta);
+        if ($target !== null) {
+            return $this->referenceType($target['type']);
         }
 
         return self::TYPE[$column['type'] ?? ''] ?? 'VARCHAR(255)';
@@ -158,39 +202,62 @@ final class PostgresSchemaCompiler
     }
 
     /**
+     * Resolve a column's FK to a creatable target, or null when it cannot be
+     * created: target table/column missing, or the target column is not a
+     * primary key / unique (Postgres requires the referenced column to be unique).
+     *
+     * @param  array<string, array{name: string, columns: array<string, array{type: string, key: bool}>}>  $meta
+     * @return array{table: string, column: string, type: string}|null
+     */
+    private function resolveFk(mixed $fk, array $meta): ?array
+    {
+        if (! is_array($fk) || empty($fk['table'])) {
+            return null;
+        }
+
+        $target = $meta[(string) $fk['table']] ?? null;
+        if ($target === null) {
+            return null;
+        }
+
+        $refColumn = (string) ($fk['column'] ?? 'id');
+        $refMeta = $target['columns'][$refColumn] ?? null;
+        if ($refMeta === null || $refMeta['key'] !== true) {
+            return null;
+        }
+
+        return ['table' => $target['name'], 'column' => $refColumn, 'type' => $refMeta['type']];
+    }
+
+    /**
      * @param  array<string, mixed>  $table
-     * @param  array<string, string>  $nameByClientId
+     * @param  array<string, array{name: string, columns: array<string, array{type: string, key: bool}>}>  $meta
      * @return list<string>
      */
-    private function foreignKeys(array $table, array $nameByClientId): array
+    private function foreignKeys(array $table, array $meta): array
     {
         $tableName = (string) $table['name'];
         $out = [];
 
         foreach (($table['columns'] ?? []) as $column) {
-            $fk = $column['fk'] ?? null;
-            if (! is_array($fk) || empty($fk['table'])) {
-                continue;
-            }
-
-            $target = $nameByClientId[(string) $fk['table']] ?? null;
+            $target = $this->resolveFk($column['fk'] ?? null, $meta);
             if ($target === null) {
-                continue; // relationship points at a table not present in this payload
+                continue; // missing or non-unique target — reported via unsupportedRelationships()
             }
 
             $colName = (string) $column['name'];
-            $refColumn = (string) ($fk['column'] ?? 'id');
             PostgresIdentifier::assertValid($colName, 'column name');
-            PostgresIdentifier::assertValid($refColumn, 'referenced column');
+            PostgresIdentifier::assertValid($target['column'], 'referenced column');
 
             $constraint = $tableName.'_'.$colName.'_fkey';
             PostgresIdentifier::assertValid($constraint, 'constraint name');
 
+            $fk = $column['fk'];
             $alter = 'ALTER TABLE '.PostgresIdentifier::quote($tableName)
                 .' ADD CONSTRAINT '.PostgresIdentifier::quote($constraint)
                 .' FOREIGN KEY ('.PostgresIdentifier::quote($colName).')'
-                .' REFERENCES '.PostgresIdentifier::quote($target)
-                .' ('.PostgresIdentifier::quote($refColumn).')'
+                .' REFERENCES '.PostgresIdentifier::quote($target['table'])
+                .' ('.PostgresIdentifier::quote($target['column']).')'
                 .$this->referentialAction('ON DELETE', $fk['onDelete'] ?? null)
                 .$this->referentialAction('ON UPDATE', $fk['onUpdate'] ?? null);
 

@@ -22,7 +22,7 @@ class Builder extends Component
     /**
      * Per-statement result of the last "push to database" attempt, or null.
      *
-     * @var array{ok: bool, results: list<array{sql: string, ok: bool, error: string|null}>, message: string}|null
+     * @var array{ok: bool, results: list<array{sql: string, ok: bool, error: string|null}>, warnings: list<string>, message: string}|null
      */
     public ?array $pushResult = null;
 
@@ -214,7 +214,7 @@ class Builder extends Component
      *
      * @param  array<string, mixed>  $connection
      * @param  array<string, mixed>  $options
-     * @return array{ok: bool, results: list<array{sql: string, ok: bool, error: string|null}>, message: string}
+     * @return array{ok: bool, results: list<array{sql: string, ok: bool, error: string|null}>, warnings: list<string>, message: string}
      */
     public function pushToDatabase(array $connection, array $options, PostgresSchemaPusher $pusher): array
     {

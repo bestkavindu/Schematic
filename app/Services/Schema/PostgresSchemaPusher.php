@@ -25,22 +25,36 @@ final class PostgresSchemaPusher
      * @param  array{name?: string, tables?: array<int, array<string, mixed>>}  $schema
      * @param  array<string, mixed>  $connection
      * @param  array<string, mixed>  $options
-     * @return array{ok: bool, results: list<array{sql: string, ok: bool, error: string|null}>, message: string}
+     * @return array{ok: bool, results: list<array{sql: string, ok: bool, error: string|null}>, warnings: list<string>, message: string}
      */
     public function push(array $schema, array $connection, array $options = []): array
     {
         $statements = $this->compiler->compile($schema);
+        $warnings = $this->compiler->unsupportedRelationships($schema);
 
         if ($statements === []) {
-            return ['ok' => false, 'results' => [], 'message' => 'Nothing to push — add a table first.'];
+            return ['ok' => false, 'results' => [], 'warnings' => $warnings, 'message' => 'Nothing to push — add a table first.'];
         }
 
         try {
             $config = $this->factory->build($connection);
         } catch (Throwable $e) {
-            return ['ok' => false, 'results' => [], 'message' => $e->getMessage()];
+            return ['ok' => false, 'results' => [], 'warnings' => $warnings, 'message' => $e->getMessage()];
         }
 
-        return $this->driver->push($statements, $config);
+        $result = $this->driver->push($statements, $config);
+
+        $message = $result['message'];
+        if ($result['ok'] && $warnings !== []) {
+            $n = count($warnings);
+            $message = "Schema pushed. {$n} relationship".($n === 1 ? '' : 's').' skipped — see below.';
+        }
+
+        return [
+            'ok' => $result['ok'],
+            'results' => $result['results'],
+            'warnings' => $warnings,
+            'message' => $message,
+        ];
     }
 }

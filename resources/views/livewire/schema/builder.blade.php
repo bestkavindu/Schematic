@@ -652,7 +652,7 @@
                            x-model="pushForm.url" @keydown.enter.prevent="pushSchema()" />
                     @error('connection.url') <span class="field-error">{{ $message }}</span> @enderror
                     <span style="font-size: 11.5px; color: var(--faint); margin-top: 6px; display: block; line-height: 1.5;">
-                        Supabase → Project Settings → Database → Connection string. Use the <strong>Session pooler</strong>
+                        Supabase → Your Project → Connect → Connection string. Use the <strong>Session pooler</strong>
                         (port 5432); SSL is required.
                     </span>
                 </div>
@@ -680,6 +680,19 @@
                                 @endforeach
                             </div>
                         @endif
+                    </div>
+                @endif
+
+                @if($pushResult && ! empty($pushResult['warnings']))
+                    <div style="margin-bottom: 12px;">
+                        <div style="font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--warn, #d98324);">
+                            Skipped relationships — fix the direction so the target is a primary key or unique column:
+                        </div>
+                        <div style="max-height: 140px; overflow: auto; border: 1px solid var(--border); border-radius: var(--r-sm, 6px); padding: 8px 10px; font-family: var(--mono); font-size: 11px; line-height: 1.6;">
+                            @foreach($pushResult['warnings'] as $w)
+                                <div style="white-space: pre-wrap; word-break: break-word; color: var(--warn, #d98324);">⚠ {{ $w }}</div>
+                            @endforeach
+                        </div>
                     </div>
                 @endif
 

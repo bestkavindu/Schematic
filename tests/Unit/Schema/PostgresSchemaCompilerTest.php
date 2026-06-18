@@ -124,6 +124,49 @@ test('a uuid-referencing foreign key column is emitted as UUID', function () {
     expect($sql)->toContain('"org_ref" UUID');
 });
 
+test('a relationship to a non-key column is skipped, reported, and does not coerce the column type', function () {
+    $schema = [
+        'tables' => [
+            ['id' => 't_projects', 'name' => 'projects', 'columns' => [
+                ['name' => 'id', 'type' => 'id', 'pk' => true],
+                ['name' => 'organization_id', 'type' => 'bigInteger'], // not a PK / unique
+            ]],
+            ['id' => 't_orgs', 'name' => 'organizations', 'columns' => [
+                // points at projects.organization_id, which Postgres cannot reference
+                ['name' => 'id', 'type' => 'id', 'pk' => true, 'fk' => [
+                    'table' => 't_projects', 'column' => 'organization_id', 'onDelete' => 'cascade',
+                ]],
+            ]],
+        ],
+    ];
+
+    $compiler = new PostgresSchemaCompiler;
+    $sql = implode("\n", $compiler->compile($schema));
+    $warnings = $compiler->unsupportedRelationships($schema);
+
+    expect($sql)->not->toContain('ADD CONSTRAINT');           // the invalid FK is not emitted
+    expect($sql)->toContain('"id" BIGSERIAL');                // organizations.id keeps its own PK type
+    expect($warnings)->toHaveCount(1);
+    expect($warnings[0])->toContain('organizations.id');
+    expect($warnings[0])->toContain('projects.organization_id');
+});
+
+test('a relationship to a unique (non-PK) column is allowed', function () {
+    $sql = implode("\n", (new PostgresSchemaCompiler)->compile([
+        'tables' => [
+            ['id' => 't_users', 'name' => 'users', 'columns' => [
+                ['name' => 'id', 'type' => 'id', 'pk' => true],
+                ['name' => 'email', 'type' => 'string', 'unique' => true],
+            ]],
+            ['id' => 't_logins', 'name' => 'logins', 'columns' => [
+                ['name' => 'email', 'type' => 'string', 'fk' => ['table' => 't_users', 'column' => 'email']],
+            ]],
+        ],
+    ]));
+
+    expect($sql)->toContain('FOREIGN KEY ("email") REFERENCES "users" ("email")');
+});
+
 test('a foreign key to an unknown table is skipped', function () {
     $sql = implode("\n", (new PostgresSchemaCompiler)->compile([
         'tables' => [[
