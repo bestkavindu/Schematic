@@ -263,7 +263,7 @@ h1.hero-title { font-size: clamp(38px, 6vw, 62px); line-height: 1.04; font-weigh
 
 /* ---------- footer ---------- */
 .footer { background: var(--bg-2); border-top: 1px solid var(--border); padding: 56px 0 32px; }
-.footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 32px; margin-bottom: 44px; }
+.footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 32px; margin-bottom: 44px; }
 .footer-brand-desc { font-size: 14px; color: var(--muted); margin: 16px 0 0; max-width: 260px; }
 .footer-col h4 { font-size: 13px; font-weight: 620; color: var(--ink); margin: 0 0 14px; }
 .footer-col a { display: block; font-size: 14px; color: var(--muted); padding: 5px 0; transition: .12s; }

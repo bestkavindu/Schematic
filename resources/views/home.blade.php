@@ -36,6 +36,7 @@
     <nav class="nav-links">
       <a class="nav-link" href="#features">Features</a>
       <a class="nav-link" href="#how">How it works</a>
+      <a class="nav-link" href="#about">About</a>
       <a class="nav-link" href="#pricing">Pricing</a>
       <a class="nav-link" href="{{ $tryUrl }}">Live demo</a>
     </nav>
@@ -60,6 +61,7 @@
 <div class="mobile-menu" id="mobileMenu">
   <a href="#features">Features</a>
   <a href="#how">How it works</a>
+  <a href="#about">About</a>
   <a href="#pricing">Pricing</a>
   <a href="{{ $tryUrl }}">Live demo</a>
   @auth
@@ -304,6 +306,49 @@
   </div>
 </section>
 
+<!-- ============ ABOUT ============ -->
+<section class="section" id="about">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="tag">ABOUT US</span>
+      <h2>Built by <span class="grad">CodeMaster</span></h2>
+      <p>We're a small product studio building SaaS applications and developer web tools that make everyday engineering faster. Schematic is one of them.</p>
+    </div>
+
+    <div class="bento">
+      <div class="cell span-3 reveal">
+        <div class="cell-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+        <h3>Our mission</h3>
+        <p>Ship SaaS products and web tools that remove friction from the developer workflow — visual where it helps, code where it counts, no bloat in between.</p>
+      </div>
+
+      <div class="cell span-3 reveal">
+        <div class="cell-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/></svg></div>
+        <h3>What we build</h3>
+        <p>SaaS applications and focused web tools — from this visual database schema builder to the next tool on our roadmap. Practical software, built by developers for developers.</p>
+      </div>
+
+      <div class="cell span-2 reveal">
+        <div class="cell-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="m2 17 10 5 10-5M2 12l10 5 10-5"/></svg></div>
+        <h3>Developer-first</h3>
+        <p>Real types, real exports, real output you can drop into your repo. We sweat the details devs actually care about.</p>
+      </div>
+
+      <div class="cell span-2 reveal">
+        <div class="cell-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
+        <h3>Lean &amp; fast</h3>
+        <p>A small team shipping quickly. Less overhead, faster iteration, tools that stay simple as they grow.</p>
+      </div>
+
+      <div class="cell span-2 reveal">
+        <div class="cell-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg></div>
+        <h3>Built to ship</h3>
+        <p>Every tool earns its place by getting real work done. If it doesn't move your project forward, we don't build it.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ============ PRICING ============ -->
 {{-- <section class="section" id="pricing">
   <div class="wrap">
@@ -365,20 +410,14 @@
           <span class="brand-logo"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.7 4 3 9 3s9-1.3 9-3V5"/><path d="M3 12c0 1.7 4 3 9 3s9-1.3 9-3"/></svg></span>
           Schematic
         </a>
-        <p class="footer-brand-desc">The visual database schema builder for modern dev teams.</p>
+        <p class="footer-brand-desc">The visual database schema builder for modern dev teams. A CodeMaster product.</p>
       </div>
-      <div class="footer-col"><h4>Product</h4><a href="#features">Features</a><a href="#pricing">Pricing</a><a href="{{ $tryUrl }}">Live demo</a><a href="#">Changelog</a></div>
-      <div class="footer-col"><h4>Resources</h4><a href="#">Documentation</a><a href="#">Export formats</a><a href="#">Templates</a><a href="#">API</a></div>
-      <div class="footer-col"><h4>Company</h4><a href="#">About</a><a href="#">Blog</a><a href="#">Careers</a><a href="#">Contact</a></div>
-      <div class="footer-col"><h4>Legal</h4><a href="{{ route('legal.privacy') }}">Privacy</a><a href="{{ route('legal.terms') }}">Terms</a><a href="#">Security</a></div>
+      <div class="footer-col"><h4>Product</h4><a href="#features">Features</a><a href="#how">How it works</a><a href="{{ $tryUrl }}">Live demo</a></div>
+      <div class="footer-col"><h4>Company</h4><a href="#about">About</a></div>
+      <div class="footer-col"><h4>Legal</h4><a href="{{ route('legal.privacy') }}">Privacy</a><a href="{{ route('legal.terms') }}">Terms</a></div>
     </div>
     <div class="footer-bot">
-      <span class="copy">© 2026 Schematic Labs. All rights reserved.</span>
-      <div class="footer-social">
-        <a href="#" aria-label="GitHub"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.5 2 2 6.6 2 12.3c0 4.5 2.9 8.3 6.8 9.7.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.4-3.4-1.4-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.6 2.4 1.1 3 .9.1-.7.4-1.1.6-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.3 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5a10.3 10.3 0 0 0 6.8-9.7C22 6.6 17.5 2 12 2Z"/></svg></a>
-        <a href="#" aria-label="X"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M18.2 2h3.3l-7.2 8.2L22.8 22h-6.6l-5.2-6.8L4.9 22H1.6l7.7-8.8L1.2 2h6.8l4.7 6.2L18.2 2Zm-1.2 18h1.8L7.1 3.9H5.2L17 20Z"/></svg></a>
-        <a href="#" aria-label="Discord"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M19.3 5.3A17 17 0 0 0 15.1 4l-.2.4a13 13 0 0 1 3.7 1.9 12 12 0 0 0-10.3 0A13 13 0 0 1 12 4.4L11.8 4a17 17 0 0 0-4.2 1.3C4.9 9.3 4.2 13.2 4.5 17a17 17 0 0 0 5.2 2.6l.4-.6a11 11 0 0 1-1.8-.9l.4-.3a12 12 0 0 0 10.4 0l.4.3a11 11 0 0 1-1.8.9l.4.6a17 17 0 0 0 5.2-2.6c.4-4.4-.7-8.3-3-11.7ZM9.7 14.7c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2Zm4.6 0c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2Z"/></svg></a>
-      </div>
+      <span class="copy">© 2026 CodeMaster. All rights reserved.</span>
     </div>
   </div>
 </footer>
