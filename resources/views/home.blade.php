@@ -21,7 +21,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;450;500;540;560;600;620;640;680;700;720&family=Geist+Mono:wght@400;450;500;640&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="{{ asset('css/landing.css') }}" />
+<link rel="stylesheet" href="{{ asset('css/landing.css') }}?v={{ filemtime(public_path('css/landing.css')) }}" />
 </head>
 <body>
 
@@ -327,12 +327,16 @@
 </section>
 
 <!-- ============ PRICING ============ -->
-<section class="section" id="pricing">
+<section class="section" id="pricing" x-data="{ cycle: 'monthly' }">
   <div class="wrap">
     <div class="section-head reveal">
       <span class="tag">PRICING</span>
       <h2>Start free. Upgrade when your team grows.</h2>
       <p>Every plan includes unlimited tables, visual editing, and SQL export.</p>
+    </div>
+    <div class="bill-toggle reveal">
+      <button type="button" :class="{ on: cycle === 'monthly' }" @click="cycle = 'monthly'">Monthly</button>
+      <button type="button" :class="{ on: cycle === 'yearly' }" @click="cycle = 'yearly'">Yearly <span class="bill-save">−17%</span></button>
     </div>
     <div class="price-grid">
       <div class="plan reveal">
@@ -349,7 +353,11 @@
       <div class="plan featured reveal">
         <div class="plan-badge">MOST POPULAR</div>
         <div class="plan-name">Team</div>
-        <div class="plan-price">$12<span> /user/mo</span></div>
+        <div class="plan-price">
+          <span x-show="cycle === 'monthly'">$12<span> /user/mo</span></span>
+          <span x-show="cycle === 'yearly'" style="display:none">$10<span> /user/mo</span></span>
+        </div>
+        <div class="plan-billed" x-show="cycle === 'yearly'" style="display:none">Billed annually ($120/user/yr)</div>
         <div class="plan-desc">For teams designing schemas together.</div>
         <ul class="plan-feats">
           <li><span class="ck"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg></span>Unlimited projects</li>
@@ -357,7 +365,12 @@
           <li><span class="ck"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg></span>Schema diffing &amp; history</li>
           <li><span class="ck"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg></span>Comments &amp; share links</li>
         </ul>
-        <a class="btn btn-primary" style="width:100%" href="{{ $signupUrl }}">Start free trial</a>
+        @if (auth()->check() && auth()->user()->subscribed())
+          <a class="btn btn-primary" style="width:100%" href="{{ route('billing.portal') }}">Manage plan</a>
+        @else
+          <a class="btn btn-primary" style="width:100%"
+             :href="cycle === 'yearly' ? '{{ route('billing.subscribe', 'yearly') }}' : '{{ route('billing.subscribe', 'monthly') }}'">Start with Team</a>
+        @endif
       </div>
       <div class="plan reveal">
         <div class="plan-name">Enterprise</div>
@@ -416,6 +429,6 @@
   </div>
 </footer>
 
-<script src="{{ asset('js/landing.js') }}"></script>
+<script src="{{ asset('js/landing.js') }}?v={{ filemtime(public_path('js/landing.js')) }}"></script>
 </body>
 </html>

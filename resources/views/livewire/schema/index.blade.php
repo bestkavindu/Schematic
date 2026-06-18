@@ -17,6 +17,11 @@
         ->implode('') ?: mb_strtoupper(mb_substr($user->email, 0, 1));
     $memberSince = optional($user->created_at)->format('F Y') ?? '—';
     $verified = ! method_exists($user, 'hasVerifiedEmail') || $user->hasVerifiedEmail();
+
+    $subscribed = $this->subscribed;
+    $projectLimit = $this->projectLimit;        // null when unlimited (paid)
+    $projectCount = $this->projects->count();
+    $atLimit = $projectLimit !== null && $projectCount >= $projectLimit;
 @endphp
 
 <div class="dash screen-fade" x-data="schematicDashboard(@js($projects))" x-cloak>
@@ -55,6 +60,17 @@
                     <span x-html="icon('Edit', { size: 15 })" style="display:flex"></span>
                     Edit profile
                 </a>
+                @if ($this->subscribed)
+                    <a class="menu-item" href="{{ route('billing.portal') }}">
+                        <span x-html="icon('Layout', { size: 15 })" style="display:flex"></span>
+                        Manage billing
+                    </a>
+                @else
+                    <a class="menu-item" href="{{ route('billing.subscribe', 'monthly') }}">
+                        <span x-html="icon('ArrowUp', { size: 15 })" style="display:flex"></span>
+                        Upgrade plan
+                    </a>
+                @endif
                 <div class="menu-sep"></div>
                 <button type="button" class="menu-item danger" wire:click="logout">
                     <span x-html="icon('X', { size: 15 })" style="display:flex"></span>
@@ -111,7 +127,18 @@
         <div class="dash-head">
             <div>
                 <h1 class="dash-h1">Your schemas</h1>
-                <p class="dash-sub" x-text="projects.length + ' project' + (projects.length === 1 ? '' : 's') + ' · Laravel workspace'"></p>
+                <p class="dash-sub">
+                    <span x-text="projects.length + ' project' + (projects.length === 1 ? '' : 's')"></span>
+                    @if ($subscribed)
+                        · Team plan
+                    @else
+                        · Free plan ·
+                        <span x-text="projects.length"></span>/{{ $projectLimit }} projects
+                        @if ($atLimit)
+                            <a href="{{ route('billing.subscribe', 'monthly') }}" style="color: var(--accent); font-weight: 560;">Upgrade</a>
+                        @endif
+                    @endif
+                </p>
             </div>
             <div class="search search-dash" @keydown.escape.stop="q = ''">
                 <span x-html="icon('Search', { size: 15 })" style="display:flex"></span>
@@ -202,4 +229,28 @@
             </div>
         </template>
     </div>
+
+    {{-- ---------- project-limit upgrade modal (driven by Livewire) ---------- --}}
+    <template x-teleport="body">
+        <div class="pf-scrim" x-show="$wire.showLimitModal" x-transition.opacity style="display:none"
+             @keydown.escape.window="$wire.showLimitModal = false" @click="$wire.showLimitModal = false">
+            <div class="pf-card" @click.stop x-show="$wire.showLimitModal" x-transition.scale.origin.top>
+                <button type="button" class="pf-close" @click="$wire.showLimitModal = false" aria-label="Close" x-html="icon('X', { size: 16 })"></button>
+
+                <div class="pf-hero">
+                    <span class="avatar avatar-xl" x-html="icon('ArrowUp', { size: 22 })"></span>
+                    <div class="pf-name">You've hit the free limit</div>
+                    <div class="pf-email">The free plan includes {{ $projectLimit }} projects. Upgrade to Team for unlimited schemas.</div>
+                </div>
+
+                <div class="pf-actions">
+                    <a class="btn btn-primary" href="{{ route('billing.subscribe', 'monthly') }}">
+                        <span x-html="icon('ArrowUp', { size: 14 })" style="display:flex"></span>
+                        Upgrade to Team
+                    </a>
+                    <button type="button" class="btn" @click="$wire.showLimitModal = false">Not now</button>
+                </div>
+            </div>
+        </div>
+    </template>
 </div>

@@ -17,13 +17,42 @@ use Livewire\Component;
 class Index extends Component
 {
     /**
+     * Whether the "upgrade to add more projects" modal is open.
+     */
+    public bool $showLimitModal = false;
+
+    /**
      * Create a blank project and jump straight into the builder.
      */
     public function newProject(): void
     {
+        if (! Auth::user()->canCreateProject()) {
+            $this->showLimitModal = true;
+
+            return;
+        }
+
         $project = Auth::user()->schemaProjects()->create(['name' => 'Untitled Schema']);
 
         $this->redirectRoute('schemas.builder', ['project' => $project], navigate: true);
+    }
+
+    /**
+     * The project cap for the current user, or null when unlimited (paid).
+     */
+    #[Computed]
+    public function projectLimit(): ?int
+    {
+        return Auth::user()->projectLimit();
+    }
+
+    /**
+     * Whether the current user is subscribed to a paid plan.
+     */
+    #[Computed]
+    public function subscribed(): bool
+    {
+        return Auth::user()->subscribed();
     }
 
     /**

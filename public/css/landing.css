@@ -196,6 +196,15 @@ h1.hero-title { font-size: clamp(38px, 6vw, 62px); line-height: 1.04; font-weigh
 .q-role { font-size: 13px; color: var(--muted); }
 
 /* ---------- stats ---------- */
+/* ---------- billing cycle toggle ---------- */
+.bill-toggle { display: inline-flex; gap: 4px; margin: -28px auto 36px; padding: 4px; background: var(--bg-2); border: 1px solid var(--border); border-radius: 999px; }
+.bill-toggle button { display: inline-flex; align-items: center; gap: 7px; padding: 7px 18px; border-radius: 999px; font-size: 14px; font-weight: 540; color: var(--ink-3); transition: .14s; }
+.bill-toggle button.on { background: #fff; color: var(--ink); box-shadow: var(--shadow-sm); }
+.bill-save { font-size: 11px; font-weight: 620; color: var(--c-green-d); background: var(--c-green-t); padding: 1px 7px; border-radius: 999px; }
+.plan-billed { font-size: 12.5px; color: var(--muted); margin: -2px 0 2px; }
+/* center the toggle within the centered section-head column */
+.section-head + .bill-toggle { display: flex; width: fit-content; }
+
 .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; max-width: 880px; margin: 0 auto; }
 .stat { text-align: center; }
 .stat-n { font-size: clamp(30px, 4vw, 42px); font-weight: 720; letter-spacing: -.03em; }

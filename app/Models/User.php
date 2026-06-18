@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Danestves\LaravelPolar\Billable;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -34,7 +35,12 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
 class User extends Authenticatable implements PasskeyUser
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
+    use Billable, HasFactory, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
+
+    /**
+     * Projects a user may own without a paid subscription.
+     */
+    public const FREE_PROJECT_LIMIT = 3;
 
     /**
      * Get the attributes that should be cast.
@@ -57,6 +63,26 @@ class User extends Authenticatable implements PasskeyUser
     public function schemaProjects(): HasMany
     {
         return $this->hasMany(SchemaProject::class);
+    }
+
+    /**
+     * The number of projects the user may own, or null when unlimited (paid).
+     */
+    public function projectLimit(): ?int
+    {
+        return $this->subscribed() ? null : self::FREE_PROJECT_LIMIT;
+    }
+
+    /**
+     * Whether the user is allowed to create another schema project.
+     */
+    public function canCreateProject(): bool
+    {
+        if ($this->subscribed()) {
+            return true;
+        }
+
+        return $this->schemaProjects()->count() < self::FREE_PROJECT_LIMIT;
     }
 
     /**
