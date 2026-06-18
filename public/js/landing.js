@@ -191,3 +191,32 @@ document.querySelectorAll(".code-tab").forEach((btn) => {
     renderCode(btn.dataset.tab);
   });
 });
+
+// ===== stat count-up =====
+// Animate each .stat-n from 0 to its value when it scrolls into view.
+// Preserves any prefix/suffix ("<5 min", "12k+") and the original decimal places.
+const statEls = [...document.querySelectorAll(".stat-n")];
+if (statEls.length && !prefersReduced && "IntersectionObserver" in window) {
+  const sio = new IntersectionObserver((entries) => {
+    entries.forEach((e) => {
+      if (!e.isIntersecting) return;
+      const el = e.target;
+      sio.unobserve(el);
+      const m = el.textContent.trim().match(/^(\D*)(\d+(?:\.\d+)?)(.*)$/);
+      if (!m) return;
+      const pre = m[1], target = parseFloat(m[2]), suf = m[3];
+      const dec = (m[2].split(".")[1] || "").length;
+      const dur = 1100, t0 = performance.now();
+      el.textContent = pre + (0).toFixed(dec) + suf;
+      const tick = (now) => {
+        const p = Math.min(1, (now - t0) / dur);
+        const eased = 1 - Math.pow(1 - p, 3); // easeOutCubic
+        el.textContent = pre + (target * eased).toFixed(dec) + suf;
+        if (p < 1) requestAnimationFrame(tick);
+        else el.textContent = pre + target.toFixed(dec) + suf;
+      };
+      requestAnimationFrame(tick);
+    });
+  }, { threshold: 0.5 });
+  statEls.forEach((el) => sio.observe(el));
+}
