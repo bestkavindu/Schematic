@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Services\Schema\Contracts\SchemaPushDriver;
+use App\Services\Schema\DirectPdoPushDriver;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -15,7 +17,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->bind(SchemaPushDriver::class, DirectPdoPushDriver::class);
     }
 
     /**

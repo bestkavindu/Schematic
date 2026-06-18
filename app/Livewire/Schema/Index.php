@@ -17,13 +17,35 @@ use Livewire\Component;
 class Index extends Component
 {
     /**
+     * Max projects a user may own. Lifted once subscriptions land.
+     */
+    public const PROJECT_LIMIT = 2;
+
+    /**
      * Create a blank project and jump straight into the builder.
      */
     public function newProject(): void
     {
-        $project = Auth::user()->schemaProjects()->create(['name' => 'Untitled Schema']);
+        $user = Auth::user();
+
+        if ($user->schemaProjects()->count() >= self::PROJECT_LIMIT) {
+            $this->dispatch('project-limit-reached', limit: self::PROJECT_LIMIT);
+
+            return;
+        }
+
+        $project = $user->schemaProjects()->create(['name' => 'Untitled Schema']);
 
         $this->redirectRoute('schemas.builder', ['project' => $project], navigate: true);
+    }
+
+    /**
+     * Whether the user has hit the project cap.
+     */
+    #[Computed]
+    public function atProjectLimit(): bool
+    {
+        return Auth::user()->schemaProjects()->count() >= self::PROJECT_LIMIT;
     }
 
     /**
