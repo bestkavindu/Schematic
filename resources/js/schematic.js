@@ -226,6 +226,11 @@ function schematicBuilder(initial) {
         dirty: false,
         saving: false,
 
+        // push-to-database modal (creates the schema in the user's Postgres/Supabase DB)
+        pushModal: false,
+        pushBusy: false,
+        pushForm: { url: '', sslmode: 'require' },
+
         // relationship drag-to-connect + selection state
         linkDraft: null,
         selectedRelId: null,
@@ -967,6 +972,31 @@ function schematicBuilder(initial) {
                 this.saving = false;
             }
         },
+        // Save the canvas, then create the schema in the user's Postgres/Supabase database.
+        async pushSchema() {
+            if (this.pushBusy) return;
+            if (!this.pushForm.url.trim()) { this.toast('Paste a connection string first'); return; }
+            this.pushBusy = true;
+            try {
+                await this.save();
+                if (this.dirty) { this.toast('Save failed — fix errors before pushing'); return; }
+                const res = await this.$wire.pushToDatabase(
+                    { url: this.pushForm.url, sslmode: this.pushForm.sslmode },
+                    { mode: 'create' },
+                );
+                if (res && res.ok) {
+                    this.toast('Schema pushed to your database');
+                    this.pushModal = false;
+                } else {
+                    this.toast('Push failed — see details');
+                }
+            } catch (err) {
+                this.toast('Push failed — check the console');
+                console.error(err);
+            } finally {
+                this.pushBusy = false;
+            }
+        },
         async share() {
             const url = window.location.href;
             try {
@@ -1682,9 +1712,11 @@ function loadRecents() {
     }
 }
 
-function schematicDashboard(projects) {
+function schematicDashboard(projects, atLimit, projectLimit) {
     return {
         projects: projects || [],
+        atLimit: atLimit || false,
+        projectLimit: projectLimit || 0,
         tab: 'All',
         q: '',
         tabs: ['All', 'Recent', 'Favorites', 'Shared with me', 'Archived'],

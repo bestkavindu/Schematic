@@ -19,7 +19,8 @@
     $verified = ! method_exists($user, 'hasVerifiedEmail') || $user->hasVerifiedEmail();
 @endphp
 
-<div class="dash screen-fade" x-data="schematicDashboard(@js($projects))" x-cloak>
+<div class="dash screen-fade" x-data="schematicDashboard(@js($projects), @js($this->atProjectLimit), @js(\App\Livewire\Schema\Index::PROJECT_LIMIT))" x-cloak
+     @project-limit-reached.window="atLimit = true">
 
     {{-- ---------- top bar with brand + account menu ---------- --}}
     <header class="dash-topbar" x-data="{ menu: false, profile: false }" @keydown.escape.window="menu = false; profile = false">
@@ -136,10 +137,13 @@
         </div>
 
         <div class="proj-grid">
-            <button class="proj-new" @click="newProject()">
+            <button class="proj-new" :class="{ 'is-disabled': atLimit }" :disabled="atLimit"
+                    @click="atLimit ? null : newProject()"
+                    :title="atLimit ? ('Project limit reached (' + projectLimit + '). Upgrade to add more.') : ''">
                 <div class="proj-new-ic" x-html="icon('Plus', { size: 20 })"></div>
-                <div style="font-size: 13.5px; font-weight: 560;">New Project</div>
-                <div style="font-size: 11.5px; color: var(--faint);">Start from a blank canvas</div>
+                <div style="font-size: 13.5px; font-weight: 560;" x-text="atLimit ? 'Limit reached' : 'New Project'"></div>
+                <div style="font-size: 11.5px; color: var(--faint);"
+                     x-text="atLimit ? ('Max ' + projectLimit + ' projects on the free plan') : 'Start from a blank canvas'"></div>
             </button>
 
             <template x-for="(p, i) in shown" :key="p.id">

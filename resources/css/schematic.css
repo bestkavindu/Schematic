@@ -505,6 +505,8 @@ input { font-family: inherit; }
 .proj-foot .dot { width: 3px; height: 3px; border-radius: 50%; background: var(--hairline); }
 .proj-new { border: 1px dashed var(--border-strong); background: var(--surface-2); border-radius: var(--r-lg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px; min-height: var(--proj-card-h); color: var(--muted); transition: border-color .16s var(--ease-out), color .16s var(--ease-out), background .16s var(--ease-out); cursor: pointer; }
 .proj-new:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.proj-new.is-disabled { cursor: not-allowed; opacity: .55; }
+.proj-new.is-disabled:hover { border-color: var(--border-strong); color: var(--muted); background: var(--surface-2); }
 .proj-new-ic { width: 40px; height: 40px; border-radius: var(--r); display: grid; place-items: center; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-soft); }
 
 /* dashboard search modifier + clear button */
