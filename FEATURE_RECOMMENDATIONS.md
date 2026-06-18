@@ -42,7 +42,7 @@ Checked against the actual source, not assumed:
 | 11 | **Reverse-engineer Laravel migrations** | Parse migration files → canvas | Med | L | No (moat) |
 | 12 | **Schema linter** | Flags missing FKs, no PK, missing timestamps, unindexed FKs, naming | Med | M | No |
 | 13 | **Live-DB introspection import** | Paste `information_schema` result → real schema; no credentials leave the machine | Med | M | No |
-| 14 | **Prisma export/import** | Round-trip `schema.prisma` | Med | M | Partially |
+| 14 | **Prisma export/import** | Round-trip `schema.prisma` | Med | M | ✅ Shipped |
 | 15 | **Presence cursors + comments (Reverb)** | Live cursors + resolvable comment threads on tables/cols/rels | High | L | Yes (home page) |
 
 Effort key: **S** = a day or less · **M** = a few days · **L** = ~1–2 weeks.

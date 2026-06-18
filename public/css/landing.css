@@ -123,6 +123,36 @@ h1.hero-title { font-size: clamp(38px, 6vw, 62px); line-height: 1.04; font-weigh
 .float-badge { position: absolute; background: #fff; border: 1px solid var(--border-strong); border-radius: 10px; box-shadow: var(--shadow);
   padding: 8px 12px; font-size: 12px; font-weight: 560; display: flex; align-items: center; gap: 8px; }
 
+/* traffic-light window dots (hero browser bar + code bar) */
+.tl-r { background: #fb7185; }
+.tl-y { background: #fbbf24; }
+.tl-g { background: #34d399; }
+
+/* schema-card colour themes (header tint + pk-row icon) */
+.dcard-h.t-blue   { background: var(--c-blue-t);   color: var(--c-blue-d); }
+.dcard-h.t-green  { background: var(--c-green-t);  color: var(--c-green-d); }
+.dcard-h.t-purple { background: var(--c-purple-t); color: var(--c-purple-d); }
+.dot-ic.t-blue   { color: var(--c-blue-d); }
+.dot-ic.t-green  { color: var(--c-green-d); }
+.dot-ic.t-purple { color: var(--c-purple-d); }
+.dot-ic.fk       { color: var(--faint); }
+.float-badge.t-green { color: var(--c-green-d); }
+
+/* inline code spans inside body copy */
+.code-inline { font-family: var(--mono); font-size: 13px; color: var(--accent); }
+
+/* hero product-shot entrance — cards stagger in, then connectors draw */
+@media (prefers-reduced-motion: no-preference) {
+  .hero-shot .dcard, .hero-shot .float-badge { opacity: 0; }
+  .hero-shot.in .dcard { animation: heroCardIn .6s cubic-bezier(.32,.72,0,1) both; }
+  .hero-shot.in [data-card="users"]    { animation-delay: .10s; }
+  .hero-shot.in [data-card="posts"]    { animation-delay: .25s; }
+  .hero-shot.in [data-card="comments"] { animation-delay: .40s; }
+  .hero-shot.in .float-badge { animation: heroBadgeIn .5s ease both 1s; }
+}
+@keyframes heroCardIn { from { opacity: 0; transform: translateY(14px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes heroBadgeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+
 /* ---------- logos strip ---------- */
 .logos { padding: 44px 0 8px; text-align: center; }
 .logos-label { font-size: 12.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin-bottom: 24px; }
@@ -197,13 +227,15 @@ h1.hero-title { font-size: clamp(38px, 6vw, 62px); line-height: 1.04; font-weigh
 
 /* ---------- stats ---------- */
 .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; max-width: 880px; margin: 0 auto; }
+.stats.mt-xl { margin-top: 72px; }
 .stat { text-align: center; }
 .stat-n { font-size: clamp(30px, 4vw, 42px); font-weight: 720; letter-spacing: -.03em; }
 .stat-l { font-size: 14px; color: var(--muted); margin-top: 2px; }
 
 /* ---------- pricing ---------- */
-.price-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; max-width: 980px; margin: 0 auto; align-items: start; }
-.plan { background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--r-lg); padding: 28px; transition: .18s; }
+.price-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 300px)); gap: 20px; max-width: 680px; margin: 0 auto; align-items: stretch; justify-content: center; }
+.plan { background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--r-lg); padding: 28px; transition: .18s; display: flex; flex-direction: column; }
+.plan .btn { margin-top: auto; }
 .plan:hover { box-shadow: var(--shadow); }
 .plan.featured { border-color: var(--accent); box-shadow: var(--shadow-glow); position: relative; }
 .plan-badge { position: absolute; top: -11px; left: 50%; transform: translateX(-50%); background: var(--accent); color: #fff; font-size: 11.5px; font-weight: 620; padding: 4px 12px; border-radius: 20px; }

@@ -16,9 +16,12 @@ const io = new IntersectionObserver((entries) => {
 }, { threshold: 0.12, rootMargin: "0px 0px -8% 0px" });
 document.querySelectorAll(".reveal").forEach((el) => io.observe(el));
 
+const prefersReduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
 // ===== relationship connectors (curved + crow's-foot) =====
 // Draw a one-to-many connector from a source card's right edge to a target row.
-function drawConnectors(svgId, diagramId, links) {
+// `animate` (used once for the hero) draws the curve in and fades the feet/bar.
+function drawConnectors(svgId, diagramId, links, animate) {
   const svg = document.getElementById(svgId);
   const wrap = document.getElementById(diagramId);
   if (!svg || !wrap) return;
@@ -59,6 +62,16 @@ function drawConnectors(svgId, diagramId, links) {
     path.setAttribute("stroke-width", "2");
     svg.appendChild(path);
 
+    // Draw the curve in left-to-right via a stroke-dash sweep.
+    if (animate) {
+      const len = path.getTotalLength();
+      path.style.strokeDasharray = len;
+      path.style.strokeDashoffset = len;
+      path.getBoundingClientRect(); // flush layout so the transition runs
+      path.style.transition = "stroke-dashoffset .9s cubic-bezier(.32,.72,0,1) .55s";
+      path.style.strokeDashoffset = "0";
+    }
+
     // crow's-foot (many) at source
     const foot1 = document.createElementNS(NS, "path");
     foot1.setAttribute("d", `M ${ax} ${sy} L ${sx} ${sy - 6} M ${ax} ${sy} L ${sx} ${sy} M ${ax} ${sy} L ${sx} ${sy + 6}`);
@@ -85,18 +98,32 @@ function drawConnectors(svgId, diagramId, links) {
     dot.setAttribute("cx", barX); dot.setAttribute("cy", ty); dot.setAttribute("r", "2.6");
     dot.setAttribute("fill", stroke);
     svg.appendChild(dot);
+
+    // Fade the endpoint markers in once the curve has finished drawing.
+    if (animate) {
+      [foot1, bar, tail, dot].forEach((el) => {
+        el.style.opacity = "0";
+        el.style.transition = "opacity .35s ease 1.35s";
+      });
+      svg.getBoundingClientRect();
+      [foot1, bar, tail, dot].forEach((el) => { el.style.opacity = "1"; });
+    }
   });
 }
 
+let heroDrawn = false;
 function drawAll() {
+  // Animate the hero connectors once, after a full load (so card geometry is final).
+  const animateHero = !heroDrawn && !prefersReduced && document.readyState === "complete";
   // hero: users.id -> posts.user_id (row1), users.id -> comments (via post)
   drawConnectors("heroSvg", "heroDiagram", [
     { from: "users", to: "posts", fromRow: 0, toRow: 1, color: "#3b82f6" },
     { from: "posts", to: "comments", fromRow: 0, toRow: 1, color: "#10b981" },
-  ]);
+  ], animateHero);
+  if (animateHero) heroDrawn = true;
   drawConnectors("scSvg", "scDiagram", [
     { from: "users", to: "posts", fromRow: 0, toRow: 1, color: "#3b82f6" },
-  ]);
+  ], false);
 }
 drawAll();
 window.addEventListener("resize", drawAll);

@@ -39,8 +39,11 @@
                 <template x-if="exportMenu">
                     <div class="menu" style="position:absolute; right:0; top:38px; width:224px;"
                          @keydown.escape.window="exportMenu = false">
-                        <button class="menu-item" @click="exportSql(); exportMenu = false">
-                            <span x-html="icon('Database', { size: 15 })" style="display:flex"></span><span style="flex:1">Export SQL</span>
+                        <button class="menu-item" @click="exportSql('mysql'); exportMenu = false">
+                            <span x-html="icon('Database', { size: 15 })" style="display:flex"></span><span style="flex:1">Export SQL (MySQL)</span>
+                        </button>
+                        <button class="menu-item" @click="exportSql('postgres'); exportMenu = false">
+                            <span x-html="icon('Database', { size: 15 })" style="display:flex"></span><span style="flex:1">Export SQL (PostgreSQL)</span>
                         </button>
                         <button class="menu-item" @click="exportMigration(); exportMenu = false">
                             <span x-html="icon('Layout', { size: 15 })" style="display:flex"></span><span style="flex:1">Laravel migration + models (.zip)</span>
@@ -51,13 +54,16 @@
                         <button class="menu-item" @click="exportDbml(); exportMenu = false">
                             <span x-html="icon('Database', { size: 15 })" style="display:flex"></span><span style="flex:1">Export DBML</span>
                         </button>
+                        <button class="menu-item" @click="exportPrisma(); exportMenu = false">
+                            <span x-html="icon('Database', { size: 15 })" style="display:flex"></span><span style="flex:1">Export Prisma</span>
+                        </button>
                         <div class="menu-sep"></div>
                         <button class="menu-item" @click="triggerImport()">
-                            <span x-html="icon('Upload', { size: 15 })" style="display:flex"></span><span style="flex:1">Import SQL / JSON</span>
+                            <span x-html="icon('Upload', { size: 15 })" style="display:flex"></span><span style="flex:1">Import SQL / JSON / Prisma</span>
                         </button>
                     </div>
                 </template>
-                <input type="file" accept=".sql,.json,text/sql,application/json,text/plain" x-ref="importFile" @change="importFile($event)" style="display:none" />
+                <input type="file" accept=".sql,.json,.prisma,text/sql,application/json,text/plain" x-ref="importFile" @change="importFile($event)" style="display:none" />
             </div>
         </div>
         <div class="nav-divider"></div>
