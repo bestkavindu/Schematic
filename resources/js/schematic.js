@@ -1037,11 +1037,24 @@ function schematicBuilder(initial) {
             const pg = dialect === 'postgres';
             const typeMap = pg ? PG_TYPE : SQL_TYPE;
             const q = pg ? (s) => '"' + String(s).replace(/"/g, '""') + '"' : (s) => '`' + s + '`';
+            // A FK column must match the type of the column it references — an
+            // id/serial PK is referenced as BIGINT (never BIGSERIAL), or Postgres
+            // rejects the constraint with "incompatible types". Falls back to the
+            // column's own type when the target can't be resolved.
+            const fkType = (c) => {
+                if (!c.fk) return null;
+                const tgt = this.tables.find((x) => x.id === c.fk.table);
+                if (!tgt) return null;
+                const col = tgt.columns.find((x) => x.name === c.fk.column);
+                if (!col) return null;
+                return col.type === 'id' ? 'BIGINT' : (typeMap[col.type] || 'VARCHAR(255)');
+            };
             const lines = [];
+            const alters = [];
             this.tables.forEach((t) => {
                 lines.push(`CREATE TABLE ${q(t.name)} (`);
                 const defs = t.columns.map((c) => {
-                    let d = `  ${q(c.name)} ${typeMap[c.type] || 'VARCHAR(255)'}`;
+                    let d = `  ${q(c.name)} ${fkType(c) || typeMap[c.type] || 'VARCHAR(255)'}`;
                     // Postgres auto-increment comes from the SERIAL type itself.
                     if (!pg && c.pk && c.type === 'id') d += ' AUTO_INCREMENT';
                     d += c.nullable ? ' NULL' : ' NOT NULL';
@@ -1051,20 +1064,29 @@ function schematicBuilder(initial) {
                 });
                 const pk = t.columns.filter((c) => c.pk).map((c) => q(c.name));
                 if (pk.length) defs.push(`  PRIMARY KEY (${pk.join(', ')})`);
+                lines.push(defs.join(',\n'));
+                lines.push(');\n');
+                // Foreign keys are emitted as ALTER TABLE after every table exists,
+                // so forward / circular references never fail with "relation does
+                // not exist" the way inline CREATE-TABLE FKs would.
                 t.columns.filter((c) => c.fk).forEach((c) => {
                     const tgt = this.tables.find((x) => x.id === c.fk.table);
                     if (!tgt) return;
-                    let fk = `  FOREIGN KEY (${q(c.name)}) REFERENCES ${q(tgt.name)} (${q(c.fk.column)})`;
+                    // Postgres can only reference a primary-key or unique column —
+                    // skip FKs whose target isn't one, instead of emitting SQL that
+                    // fails with "no unique constraint matching given keys".
+                    const col = tgt.columns.find((x) => x.name === c.fk.column);
+                    if (!col || !(col.pk || col.unique)) return;
+                    let fk = `ALTER TABLE ${q(t.name)} ADD FOREIGN KEY (${q(c.name)})`
+                        + ` REFERENCES ${q(tgt.name)} (${q(c.fk.column)})`;
                     const del = (c.fk.onDelete || '').toUpperCase();
                     const upd = (c.fk.onUpdate || '').toUpperCase();
                     if (del && del !== 'NO ACTION') fk += ` ON DELETE ${del}`;
                     if (upd && upd !== 'NO ACTION') fk += ` ON UPDATE ${upd}`;
-                    defs.push(fk);
+                    alters.push(fk + ';');
                 });
-                lines.push(defs.join(',\n'));
-                lines.push(');\n');
             });
-            this._download(lines.join('\n'), '.sql', 'text/sql');
+            this._download([...lines, ...alters].join('\n'), '.sql', 'text/sql');
             this.toast(pg ? 'Exported schema.sql (PostgreSQL)' : 'Exported schema.sql (MySQL)');
         },
         // Laravel migration export — one Schema::create() per table, with constrained() FKs.
