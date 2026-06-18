@@ -233,7 +233,7 @@ h1.hero-title { font-size: clamp(38px, 6vw, 62px); line-height: 1.04; font-weigh
 .stat-l { font-size: 14px; color: var(--muted); margin-top: 2px; }
 
 /* ---------- pricing ---------- */
-.price-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 300px)); gap: 20px; max-width: 680px; margin: 0 auto; align-items: stretch; justify-content: center; }
+.price-grid { display: grid; grid-template-columns: repeat(2, 300px); gap: 20px; margin: 0 auto; align-items: stretch; justify-content: center; }
 .plan { background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--r-lg); padding: 28px; transition: .18s; display: flex; flex-direction: column; }
 .plan .btn { margin-top: auto; }
 .plan:hover { box-shadow: var(--shadow); }
