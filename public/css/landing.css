@@ -58,24 +58,143 @@ img, svg { display: block; }
 .btn-sm { height: 38px; padding: 0 16px; font-size: 14px; }
 .btn-lg { height: 50px; padding: 0 26px; font-size: 16px; }
 
-/* ---------- nav ---------- */
+/* ============================================================
+   NAV — refined glass bar with sliding scroll-spy pill
+   Reuses existing :root tokens only:
+   --accent, --accent-soft, --accent-2, --ink, --ink-2, --ink-3,
+   --border, --border-strong, --bg-2, --surface, --maxw, --r-sm, --shadow.
+   ============================================================ */
 .nav {
   position: sticky; top: 0; z-index: 50; height: 64px;
-  background: rgba(255,255,255,.8); backdrop-filter: saturate(180%) blur(16px);
-  border-bottom: 1px solid transparent; transition: border-color .2s, box-shadow .2s;
+  background: rgba(255,255,255,.72);
+  -webkit-backdrop-filter: saturate(180%) blur(16px);
+  backdrop-filter: saturate(180%) blur(16px);
+  /* hairline ring lives in box-shadow (grafted from floating-island) so the
+     bottom edge stays crisp with no transparent-border seam */
+  box-shadow: inset 0 -1px 0 transparent;
+  transition: background .25s ease, box-shadow .25s ease;
 }
-.nav.scrolled { border-color: var(--border); box-shadow: 0 1px 0 rgba(24,24,27,.02); }
-.nav-inner { max-width: var(--maxw); margin: 0 auto; padding: 0 28px; height: 100%; display: flex; align-items: center; gap: 28px; }
-.brand { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 16.5px; letter-spacing: -.02em; }
-.brand-logo { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; color: #fff;
-  background: linear-gradient(150deg, #6366f1, #4f46e5); box-shadow: 0 2px 8px -1px rgba(79,70,229,.5); }
-.nav-links { display: flex; align-items: center; gap: 4px; }
-.nav-link { padding: 8px 12px; border-radius: var(--r-sm); font-size: 14.5px; font-weight: 500; color: var(--ink-3); transition: .12s; }
-.nav-link:hover { color: var(--ink); background: var(--bg-2); }
+/* .scrolled is toggled by existing landing.js at scrollY > 8 */
+.nav.scrolled {
+  background: rgba(255,255,255,.82);
+  box-shadow:
+    inset 0 -1px 0 var(--border),
+    0 8px 24px -16px rgba(24,24,27,.22);
+}
+
+.nav-inner {
+  max-width: var(--maxw); margin: 0 auto; padding: 0 28px;
+  height: 100%; display: flex; align-items: center; gap: 28px;
+}
+
+/* ---- brand / logo ---- */
+.brand {
+  display: flex; align-items: center; gap: 10px;
+  font-weight: 650; font-size: 16.5px; letter-spacing: -.02em;
+  color: var(--ink); border-radius: var(--r-sm); flex-shrink: 0;
+}
+.brand-logo {
+  width: 30px; height: 30px; border-radius: 9px;
+  display: grid; place-items: center; color: #fff; flex-shrink: 0;
+  background: linear-gradient(150deg, #6366f1, #4f46e5);
+  box-shadow: 0 2px 8px -1px rgba(79,70,229,.5);
+  transition: transform .2s cubic-bezier(.34,1.56,.64,1);
+}
+.brand:hover .brand-logo { transform: rotate(-6deg) scale(1.05); }
+
+/* ---- desktop links + sliding pill ---- */
+.nav-links {
+  position: relative;            /* anchor for #navPill */
+  display: flex; align-items: center; gap: 2px;
+}
+.nav-link {
+  position: relative; z-index: 1;
+  padding: 8px 13px; border-radius: var(--r-sm);
+  font-size: 14.5px; font-weight: 500; color: var(--ink-3);
+  transition: color .18s ease;
+}
+.nav-link:hover { color: var(--ink); }
+
+/* underline wipe — hover/focus only; the pill owns the active state */
+.nav-link::after {
+  content: ""; position: absolute; left: 13px; right: 13px; bottom: 4px;
+  height: 2px; border-radius: 2px; background: var(--accent);
+  transform: scaleX(0); transform-origin: left;
+  transition: transform .24s cubic-bezier(.32,.72,0,1);
+}
+.nav-link:hover::after,
+.nav-link:focus-visible::after { transform: scaleX(1); }
+
+/* active section (scroll-spy sets aria-current="true") */
+.nav-link[aria-current="true"] { color: var(--ink); font-weight: 540; }
+.nav-link[aria-current="true"]::after { transform: scaleX(0); } /* pill, not underline */
+
+/* the sliding pill itself */
+.nav-pill {
+  position: absolute; top: 50%; left: 0; z-index: 0;
+  height: 34px; width: 0; transform: translateY(-50%);
+  border-radius: var(--r-sm);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px rgba(91,91,214,.10);
+  opacity: 0; pointer-events: none;
+  transition:
+    transform .34s cubic-bezier(.34,1.16,.5,1),
+    width .34s cubic-bezier(.34,1.16,.5,1),
+    opacity .2s ease;
+}
+.nav-pill.show { opacity: 1; }
+
+/* "Live demo" reads as an action, not a section — quiet accent tint */
+.nav-link--demo { color: var(--ink-2); }
+.nav-link--demo:hover { color: var(--accent-2); }
+
+/* ---- layout helpers + CTA ---- */
 .nav-spacer { flex: 1; }
-.nav-cta { display: flex; align-items: center; gap: 10px; }
-.nav-toggle { display: none; }
+.nav-cta { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+/* CTA arrow nudge already handled by existing .btn-primary:hover svg rule */
+
+/* ---- focus-visible (all interactive nav elements) ---- */
+.nav a:focus-visible,
+.nav button:focus-visible,
+.mobile-menu a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+/* ---- mobile toggle (animated hamburger -> X) ---- */
+.nav-toggle {
+  display: none; place-items: center; width: 40px; height: 40px;
+  border-radius: 9px; color: var(--ink-2);
+  background: none; border: 0; cursor: pointer;
+  transition: background .15s ease;
+}
+.nav-toggle:hover { background: var(--bg-2); }
+.nav-toggle-bars { position: relative; width: 22px; height: 16px; }
+.nav-toggle-bars span {
+  position: absolute; left: 0; height: 2px; width: 22px; border-radius: 2px;
+  background: currentColor;
+  transition: transform .3s cubic-bezier(.32,.72,0,1), opacity .2s ease;
+}
+.nav-toggle-bars span:nth-child(1) { top: 1px; }
+.nav-toggle-bars span:nth-child(2) { top: 7px; }
+.nav-toggle-bars span:nth-child(3) { top: 13px; }
+.nav-toggle[aria-expanded="true"] .nav-toggle-bars span:nth-child(1) { transform: translateY(6px) rotate(45deg); }
+.nav-toggle[aria-expanded="true"] .nav-toggle-bars span:nth-child(2) { opacity: 0; }
+.nav-toggle[aria-expanded="true"] .nav-toggle-bars span:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
+
+/* ---- mobile menu (hidden on desktop) ---- */
 .mobile-menu { display: none; }
+
+/* ============================================================
+   REDUCED MOTION — neutralize every nav transition incl. the pill
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  .nav, .nav-pill, .nav-link, .nav-link::after,
+  .brand-logo, .nav-toggle-bars span,
+  .mobile-menu, .mobile-menu a { transition: none !important; }
+  .nav-pill { transition: opacity .01ms !important; }
+}
 
 /* ---------- hero ---------- */
 .hero { position: relative; padding: 76px 0 60px; overflow: hidden; }
@@ -284,10 +403,6 @@ h1.hero-title { font-size: clamp(38px, 6vw, 62px); line-height: 1.04; font-weigh
 .cell:hover .cell-ic { transform: scale(1.08) rotate(-4deg); }
 .btn svg { transition: transform .16s ease; }
 .btn-primary:hover svg, .btn-white:hover svg { transform: translateX(3px); }
-.nav-link { position: relative; }
-.nav-link::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: 5px; height: 2px; border-radius: 2px;
-  background: var(--accent); transform: scaleX(0); transform-origin: left; transition: transform .22s cubic-bezier(.32,.72,0,1); }
-.nav-link:hover::after { transform: scaleX(1); }
 .stat-n { transition: color .2s; }
 .stat:hover .stat-n { color: var(--accent); }
 
@@ -333,11 +448,25 @@ h1.hero-title { font-size: clamp(38px, 6vw, 62px); line-height: 1.04; font-weigh
 }
 @media (max-width: 680px) {
   .nav-links, .nav-cta .btn-ghost { display: none; }
-  .nav-toggle { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 9px; color: var(--ink-2); }
-  .nav-toggle:hover { background: var(--bg-2); }
-  .mobile-menu.open { display: block; position: fixed; inset: 64px 0 auto; background: #fff; border-bottom: 1px solid var(--border); z-index: 49; padding: 16px 28px 24px; box-shadow: var(--shadow); }
-  .mobile-menu a { display: block; padding: 12px 0; font-size: 16px; font-weight: 540; border-bottom: 1px solid var(--border); }
-  .mobile-menu .btn { width: 100%; margin-top: 16px; }
+  .nav-toggle { display: grid; }
+  .mobile-menu {
+    display: block; position: fixed; inset: 64px 0 auto; z-index: 49;
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 12px 28px 22px; box-shadow: var(--shadow);
+    opacity: 0; visibility: hidden; transform: translateY(-10px);
+    transition: opacity .22s ease, transform .26s cubic-bezier(.32,.72,0,1), visibility .22s;
+  }
+  .mobile-menu.open { opacity: 1; visibility: visible; transform: translateY(0); }
+  .mobile-menu a {
+    display: block; padding: 13px 4px; font-size: 16px; font-weight: 540;
+    color: var(--ink-2); border-bottom: 1px solid var(--border);
+    transition: color .15s ease, padding-left .18s ease;
+  }
+  .mobile-menu a:hover { color: var(--ink); padding-left: 8px; }
+  .mobile-menu a[aria-current="true"] { color: var(--accent-2); }
+  .mobile-menu .btn { width: 100%; margin-top: 12px; border-bottom: none; }
+  .mobile-menu .btn + .btn { margin-top: 10px; }
+  .mobile-menu .btn:hover { padding-left: 0; }
   .hero { padding: 48px 0 40px; }
   .browser-body { height: 340px; }
   .bento { grid-template-columns: 1fr; }

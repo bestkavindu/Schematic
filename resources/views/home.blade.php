@@ -27,20 +27,23 @@
 <!-- ============ NAV ============ -->
 <header class="nav" id="nav">
   <div class="nav-inner">
-    <a class="brand" href="#top">
+    <a class="brand" href="#top" aria-label="Schematic — home">
       <span class="brand-logo">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.7 4 3 9 3s9-1.3 9-3V5"/><path d="M3 12c0 1.7 4 3 9 3s9-1.3 9-3"/></svg>
       </span>
       Schematic
     </a>
-    <nav class="nav-links">
-      <a class="nav-link" href="#features">Features</a>
-      <a class="nav-link" href="#how">How it works</a>
-      <a class="nav-link" href="#about">About</a>
-      <a class="nav-link" href="#pricing">Pricing</a>
-      <a class="nav-link" href="{{ $tryUrl }}">Live demo</a>
+
+    <nav class="nav-links" id="navLinks" aria-label="Primary">
+      <span class="nav-pill" id="navPill" aria-hidden="true"></span>
+      <a class="nav-link" href="#features" data-spy="features">Features</a>
+      <a class="nav-link" href="#how" data-spy="how">How it works</a>
+      <a class="nav-link" href="#about" data-spy="about">About</a>
+      <a class="nav-link nav-link--demo" href="{{ $tryUrl }}">Live demo</a>
     </nav>
+
     <div class="nav-spacer"></div>
+
     <div class="nav-cta">
       @auth
         <a class="btn btn-primary btn-sm" href="{{ route('schemas.index') }}">Your diagrams
@@ -53,20 +56,23 @@
         </a>
       @endauth
     </div>
-    <button class="nav-toggle" id="navToggle" aria-label="Menu">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+
+    <button class="nav-toggle" id="navToggle" aria-label="Open menu" aria-expanded="false" aria-controls="mobileMenu">
+      <span class="nav-toggle-bars" aria-hidden="true"><span></span><span></span><span></span></span>
     </button>
   </div>
 </header>
+
+<!-- MOBILE MENU -->
 <div class="mobile-menu" id="mobileMenu">
   <a href="#features">Features</a>
   <a href="#how">How it works</a>
   <a href="#about">About</a>
-  <a href="#pricing">Pricing</a>
   <a href="{{ $tryUrl }}">Live demo</a>
   @auth
     <a class="btn btn-primary" href="{{ route('schemas.index') }}">Your diagrams</a>
   @else
+    <a class="btn btn-ghost" href="{{ $signInUrl }}">Sign in</a>
     <a class="btn btn-primary" href="{{ $tryUrl }}">Open app</a>
   @endauth
 </div>
