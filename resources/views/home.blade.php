@@ -296,7 +296,7 @@
 </section>
 
 <!-- ============ PRICING ============ -->
-<section class="section" id="pricing">
+{{-- <section class="section" id="pricing">
   <div class="wrap">
     <div class="section-head reveal">
       <span class="tag">PRICING</span>
@@ -330,7 +330,7 @@
       </div>
     </div>
   </div>
-</section>
+</section> --}}
 
 <!-- ============ CTA BAND ============ -->
 <section class="cta-band">
