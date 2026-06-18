@@ -6,6 +6,7 @@ use App\Models\SchemaColumn;
 use App\Models\SchemaGroup;
 use App\Models\SchemaProject;
 use App\Models\SchemaTable;
+use App\Services\Schema\PostgresSchemaPusher;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -17,6 +18,13 @@ use Livewire\Component;
 class Builder extends Component
 {
     public SchemaProject $project;
+
+    /**
+     * Per-statement result of the last "push to database" attempt, or null.
+     *
+     * @var array{ok: bool, results: list<array{sql: string, ok: bool, error: string|null}>, warnings: list<string>, message: string}|null
+     */
+    public ?array $pushResult = null;
 
     public function mount(SchemaProject $project): void
     {
@@ -116,7 +124,7 @@ class Builder extends Component
         // Cross-field checks the flat rules can't express: a relationship needs a target
         // column, and its target table must be one of the tables present in this payload.
         $validator->after(function ($v) use ($payload): void {
-            $tableIds = collect($payload['tables'] ?? [])->pluck('id')->all();
+            $tableIds = collect(is_array($payload['tables'] ?? null) ? $payload['tables'] : [])->pluck('id')->all();
 
             foreach (($payload['tables'] ?? []) as $ti => $table) {
                 foreach (($table['columns'] ?? []) as $ci => $column) {
@@ -199,6 +207,58 @@ class Builder extends Component
     }
 
     /**
+     * Create this schema's tables, columns and foreign keys directly in an
+     * external PostgreSQL database (e.g. Supabase). Create-only and safe:
+     * existing tables are left untouched. The schema pushed is the trusted
+     * server-side state ($this->schema()), never SQL sent from the browser.
+     *
+     * @param  array<string, mixed>  $connection
+     * @param  array<string, mixed>  $options
+     * @return array{ok: bool, results: list<array{sql: string, ok: bool, error: string|null}>, warnings: list<string>, message: string}
+     */
+    public function pushToDatabase(array $connection, array $options, PostgresSchemaPusher $pusher): array
+    {
+        abort_unless($this->project->user_id === Auth::id(), 403);
+
+        $validator = validator(
+            ['connection' => $connection, 'options' => $options],
+            [
+                'connection' => ['required', 'array'],
+                'connection.url' => ['nullable', 'string', 'max:1024'],
+                'connection.host' => ['nullable', 'string', 'max:255'],
+                'connection.port' => ['nullable', 'integer', 'between:1,65535'],
+                'connection.database' => ['nullable', 'string', 'max:128'],
+                'connection.username' => ['nullable', 'string', 'max:255'],
+                'connection.password' => ['nullable', 'string', 'max:512'],
+                'connection.schema' => ['nullable', 'string', 'max:128'],
+                'connection.sslmode' => ['nullable', 'in:disable,prefer,require,verify-ca,verify-full'],
+                'options.mode' => ['required', 'in:create'],
+            ],
+        );
+
+        // Need either a full connection string or, at minimum, a host and username.
+        $validator->after(function ($v) use ($connection): void {
+            $hasUrl = trim((string) ($connection['url'] ?? '')) !== '';
+            $hasFields = trim((string) ($connection['host'] ?? '')) !== ''
+                && trim((string) ($connection['username'] ?? '')) !== '';
+
+            if (! $hasUrl && ! $hasFields) {
+                $v->errors()->add('connection.url', 'Provide a connection string, or a host and username.');
+            }
+        });
+
+        $validator->validate();
+
+        $this->pushResult = $pusher->push($this->schema(), $connection, $options);
+
+        if (! $this->pushResult['ok']) {
+            $this->addError('push', $this->pushResult['message']);
+        }
+
+        return $this->pushResult;
+    }
+
+    /**
      * Toggle the project's favorite flag.
      */
     public function toggleFavorite(): void
@@ -209,13 +269,13 @@ class Builder extends Component
     /**
      * Delete the current project and return to the schema list.
      */
-    public function deleteProject()
+    public function deleteProject(): void
     {
         abort_unless($this->project->user_id === Auth::id(), 403);
 
         $this->project->delete();
 
-        return $this->redirectRoute('schemas.index', navigate: true);
+        $this->redirectRoute('schemas.index', navigate: true);
     }
 
     public function render(): View

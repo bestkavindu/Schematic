@@ -39,19 +39,37 @@
                 <template x-if="exportMenu">
                     <div class="menu" style="position:absolute; right:0; top:38px; width:224px;"
                          @keydown.escape.window="exportMenu = false">
-                        <button class="menu-item" @click="exportSql(); exportMenu = false">
-                            <span x-html="icon('Database', { size: 15 })" style="display:flex"></span><span style="flex:1">Export SQL</span>
+                        <button class="menu-item" @click="exportSql('mysql'); exportMenu = false">
+                            <span x-html="icon('Database', { size: 15 })" style="display:flex"></span><span style="flex:1">Export SQL (MySQL)</span>
+                        </button>
+                        <button class="menu-item" @click="exportSql('postgres'); exportMenu = false">
+                            <span x-html="icon('Database', { size: 15 })" style="display:flex"></span><span style="flex:1">Export SQL (PostgreSQL)</span>
                         </button>
                         <button class="menu-item" @click="exportMigration(); exportMenu = false">
                             <span x-html="icon('Layout', { size: 15 })" style="display:flex"></span><span style="flex:1">Laravel migration + models (.zip)</span>
                         </button>
+                        <button class="menu-item" @click="exportJson(); exportMenu = false">
+                            <span x-html="icon('Download', { size: 15 })" style="display:flex"></span><span style="flex:1">Export JSON</span>
+                        </button>
+                        <button class="menu-item" @click="exportDbml(); exportMenu = false">
+                            <span x-html="icon('Database', { size: 15 })" style="display:flex"></span><span style="flex:1">Export DBML</span>
+                        </button>
+                        <button class="menu-item" @click="exportPrisma(); exportMenu = false">
+                            <span x-html="icon('Database', { size: 15 })" style="display:flex"></span><span style="flex:1">Export Prisma</span>
+                        </button>
+                        @unless($demo)
+                        <div class="menu-sep"></div>
+                        <button class="menu-item" @click="exportMenu = false; pushModal = true">
+                            <span x-html="icon('Database', { size: 15 })" style="display:flex"></span><span style="flex:1">Push to Postgres / Supabase</span>
+                        </button>
+                        @endunless
                         <div class="menu-sep"></div>
                         <button class="menu-item" @click="triggerImport()">
-                            <span x-html="icon('Upload', { size: 15 })" style="display:flex"></span><span style="flex:1">Import SQL</span>
+                            <span x-html="icon('Upload', { size: 15 })" style="display:flex"></span><span style="flex:1">Import SQL / JSON / Prisma</span>
                         </button>
                     </div>
                 </template>
-                <input type="file" accept=".sql,text/sql,text/plain" x-ref="importFile" @change="importFile($event)" style="display:none" />
+                <input type="file" accept=".sql,.json,.prisma,text/sql,application/json,text/plain" x-ref="importFile" @change="importFile($event)" style="display:none" />
             </div>
         </div>
         <div class="nav-divider"></div>
@@ -342,11 +360,13 @@
 
             {{-- relationship line popover --}}
             <template x-if="relMenu">
-                <div class="rel-pop" x-data="{ r: relMenuRel() }" :style="menuStyle(relMenu, 270)"
+                <div class="rel-pop" x-data="{ r: relMenuRel() }" :style="relPopStyle(relMenu)"
                      @pointerdown.outside="relMenu = null" @keydown.escape.window="relMenu = null">
                     <template x-if="r">
                         <div>
-                            <div class="rel-pop-tables">
+                            <div class="rel-pop-tables" @pointerdown="startRelMenuDrag($event)"
+                                 :style="'touch-action:none;cursor:' + (relMenuDragging ? 'grabbing' : 'grab')"
+                                 title="Drag to move">
                                 <div class="rel-chip">
                                     <span class="rel-chip-head"><span class="rel-dot" :style="'background:' + r.parentColor"></span><span x-text="r.parentName"></span></span>
                                     <span class="rel-chip-col" x-text="r.parentCol"></span>
@@ -607,4 +627,84 @@
             <span x-text="toastMsg"></span>
         </div>
     </template>
+
+    {{-- ───────── Push to Postgres / Supabase modal ───────── --}}
+    @unless($demo)
+    <template x-teleport="body">
+        <div class="pf-scrim" x-show="pushModal" x-transition.opacity style="display:none" @click="pushModal = false"
+             @keydown.escape.window="pushModal = false">
+            <div class="pf-card" @click.stop x-show="pushModal" x-transition.scale.origin.top style="max-width: 540px;">
+                <button type="button" class="pf-close" @click="pushModal = false" aria-label="Close"
+                        x-html="icon('X', { size: 16 })"></button>
+
+                <div style="margin-bottom: 16px;">
+                    <h3 style="font-size: 17px; font-weight: 660; letter-spacing: -.01em; margin: 0 0 6px;">Push to Postgres / Supabase</h3>
+                    <p style="font-size: 13px; line-height: 1.5; color: var(--muted); margin: 0;">
+                        Creates these tables, columns and foreign keys directly in your database. Your schema is saved first.
+                        Existing tables are left untouched (<code>CREATE TABLE IF NOT EXISTS</code>).
+                    </p>
+                </div>
+
+                <div class="field">
+                    <span class="field-label">Connection string</span>
+                    <input class="input mono" type="password" autocomplete="off" spellcheck="false"
+                           placeholder="postgresql://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres"
+                           x-model="pushForm.url" @keydown.enter.prevent="pushSchema()" />
+                    @error('connection.url') <span class="field-error">{{ $message }}</span> @enderror
+                    <span style="font-size: 11.5px; color: var(--faint); margin-top: 6px; display: block; line-height: 1.5;">
+                        Supabase → Your Project → Connect → Connection string. Use the <strong>Session pooler</strong>
+                        (port 5432); SSL is required.
+                    </span>
+                </div>
+
+                <div class="field">
+                    <span class="field-label">SSL mode</span>
+                    <select class="select" x-model="pushForm.sslmode">
+                        <template x-for="m in ['require', 'verify-full', 'verify-ca', 'prefer', 'disable']" :key="m">
+                            <option :value="m" x-text="m"></option>
+                        </template>
+                    </select>
+                </div>
+
+                @error('push') <div class="field-error" style="margin: 4px 0 10px;">{{ $message }}</div> @enderror
+
+                @if($pushResult)
+                    <div style="margin-bottom: 12px;">
+                        <div style="font-size: 12px; font-weight: 600; margin-bottom: 6px; color: {{ $pushResult['ok'] ? 'var(--ok, #30a46c)' : 'var(--danger, #e5484d)' }};">
+                            {{ $pushResult['message'] }}
+                        </div>
+                        @if(! empty($pushResult['results']))
+                            <div style="max-height: 180px; overflow: auto; border: 1px solid var(--border); border-radius: var(--r-sm, 6px); padding: 8px 10px; font-family: var(--mono); font-size: 11px; line-height: 1.6;">
+                                @foreach($pushResult['results'] as $r)
+                                    <div style="white-space: pre-wrap; word-break: break-word; color: {{ $r['ok'] ? 'var(--ok, #30a46c)' : 'var(--danger, #e5484d)' }};">{{ $r['ok'] ? '✓' : '✗' }} {{ \Illuminate\Support\Str::limit(preg_replace('/\s+/', ' ', $r['sql']), 100) }}@if(! $r['ok'] && $r['error']) — {{ $r['error'] }}@endif</div>
+                                @endforeach
+                            </div>
+                        @endif
+                    </div>
+                @endif
+
+                @if($pushResult && ! empty($pushResult['warnings']))
+                    <div style="margin-bottom: 12px;">
+                        <div style="font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--warn, #d98324);">
+                            Skipped relationships — fix the direction so the target is a primary key or unique column:
+                        </div>
+                        <div style="max-height: 140px; overflow: auto; border: 1px solid var(--border); border-radius: var(--r-sm, 6px); padding: 8px 10px; font-family: var(--mono); font-size: 11px; line-height: 1.6;">
+                            @foreach($pushResult['warnings'] as $w)
+                                <div style="white-space: pre-wrap; word-break: break-word; color: var(--warn, #d98324);">⚠ {{ $w }}</div>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
+
+                <div class="set-modal-actions">
+                    <button type="button" class="btn" @click="pushModal = false">Cancel</button>
+                    <button type="button" class="btn btn-primary" :disabled="pushBusy" @click="pushSchema()">
+                        <span x-html="icon('Database', { size: 15 })" style="display:flex"></span>
+                        <span x-text="pushBusy ? 'Pushing…' : 'Push schema'"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </template>
+    @endunless
 </div>

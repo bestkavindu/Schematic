@@ -37,6 +37,14 @@ const SQL_TYPE = {
     date: 'DATE', datetime: 'DATETIME', timestamp: 'TIMESTAMP', json: 'JSON',
     decimal: 'DECIMAL(8,2)', float: 'DOUBLE', uuid: 'CHAR(36)',
 };
+// PostgreSQL type map. id/bigInteger auto-increment via BIGSERIAL (no AUTO_INCREMENT),
+// no UNSIGNED, BOOLEAN over TINYINT(1), JSONB, TIMESTAMP for datetime, native UUID.
+const PG_TYPE = {
+    id: 'BIGSERIAL', bigInteger: 'BIGINT', unsignedBigInteger: 'BIGINT',
+    integer: 'INTEGER', string: 'VARCHAR(255)', text: 'TEXT', boolean: 'BOOLEAN',
+    date: 'DATE', datetime: 'TIMESTAMP', timestamp: 'TIMESTAMP', json: 'JSONB',
+    decimal: 'DECIMAL(8,2)', float: 'DOUBLE PRECISION', uuid: 'UUID',
+};
 
 // ---------- color palettes (ported from app.jsx tweaks) ----------
 function hexToRgb(h) { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
@@ -218,10 +226,16 @@ function schematicBuilder(initial) {
         dirty: false,
         saving: false,
 
+        // push-to-database modal (creates the schema in the user's Postgres/Supabase DB)
+        pushModal: false,
+        pushBusy: false,
+        pushForm: { url: '', sslmode: 'require' },
+
         // relationship drag-to-connect + selection state
         linkDraft: null,
         selectedRelId: null,
         relMenu: null,
+        relMenuDragging: false,
 
         colorKeys: COLOR_KEYS,
         types: LARAVEL_TYPES,
@@ -884,6 +898,40 @@ function schematicBuilder(initial) {
             if (top + 240 > window.innerHeight - 8) top = Math.max(8, m.y - 240);
             return { left: left + 'px', top: top + 'px' };
         },
+        // Position the relationship popover. Before it's dragged we keep it fully
+        // on-screen (flipping up near the bottom); once the user moves it we honour
+        // the dragged spot and only keep a sliver on-screen so it can't be lost.
+        relPopStyle(m, w = 270) {
+            let left = m.x, top = m.y;
+            if (m.moved) {
+                left = Math.min(Math.max(left, 8), window.innerWidth - 60);
+                top = Math.min(Math.max(top, 8), window.innerHeight - 44);
+            } else {
+                if (left + w > window.innerWidth - 8) left = window.innerWidth - w - 8;
+                if (top + 150 > window.innerHeight - 8) top = Math.max(8, m.y - 150);
+            }
+            return { left: left + 'px', top: top + 'px' };
+        },
+        // Drag the relationship popover by its header so it can be moved off a table.
+        startRelMenuDrag(e) {
+            if (!this.relMenu || (e.target && e.target.closest('button'))) return;
+            e.preventDefault();
+            const startX = e.clientX, startY = e.clientY;
+            const ox = this.relMenu.x, oy = this.relMenu.y;
+            this.relMenuDragging = true;
+            const move = (ev) => {
+                this.relMenu.x = ox + (ev.clientX - startX);
+                this.relMenu.y = oy + (ev.clientY - startY);
+                this.relMenu.moved = true;
+            };
+            const up = () => {
+                this.relMenuDragging = false;
+                window.removeEventListener('pointermove', move);
+                window.removeEventListener('pointerup', up);
+            };
+            window.addEventListener('pointermove', move);
+            window.addEventListener('pointerup', up);
+        },
 
         // ----- toast -----
         toast(msg) {
@@ -924,6 +972,31 @@ function schematicBuilder(initial) {
                 this.saving = false;
             }
         },
+        // Save the canvas, then create the schema in the user's Postgres/Supabase database.
+        async pushSchema() {
+            if (this.pushBusy) return;
+            if (!this.pushForm.url.trim()) { this.toast('Paste a connection string first'); return; }
+            this.pushBusy = true;
+            try {
+                await this.save();
+                if (this.dirty) { this.toast('Save failed — fix errors before pushing'); return; }
+                const res = await this.$wire.pushToDatabase(
+                    { url: this.pushForm.url, sslmode: this.pushForm.sslmode },
+                    { mode: 'create' },
+                );
+                if (res && res.ok) {
+                    this.toast('Schema pushed to your database');
+                    this.pushModal = false;
+                } else {
+                    this.toast('Push failed — see details');
+                }
+            } catch (err) {
+                this.toast('Push failed — check the console');
+                console.error(err);
+            } finally {
+                this.pushBusy = false;
+            }
+        },
         async share() {
             const url = window.location.href;
             try {
@@ -958,14 +1031,32 @@ function schematicBuilder(initial) {
             a.click();
             URL.revokeObjectURL(a.href);
         },
-        exportSql() {
-            const q = (s) => '`' + s + '`';
+        // Emit CREATE TABLE DDL. dialect: 'mysql' (backtick idents, AUTO_INCREMENT)
+        // or 'postgres' (double-quoted idents, SERIAL ids, BOOLEAN/JSONB/etc).
+        exportSql(dialect = 'mysql') {
+            const pg = dialect === 'postgres';
+            const typeMap = pg ? PG_TYPE : SQL_TYPE;
+            const q = pg ? (s) => '"' + String(s).replace(/"/g, '""') + '"' : (s) => '`' + s + '`';
+            // A FK column must match the type of the column it references — an
+            // id/serial PK is referenced as BIGINT (never BIGSERIAL), or Postgres
+            // rejects the constraint with "incompatible types". Falls back to the
+            // column's own type when the target can't be resolved.
+            const fkType = (c) => {
+                if (!c.fk) return null;
+                const tgt = this.tables.find((x) => x.id === c.fk.table);
+                if (!tgt) return null;
+                const col = tgt.columns.find((x) => x.name === c.fk.column);
+                if (!col) return null;
+                return col.type === 'id' ? 'BIGINT' : (typeMap[col.type] || 'VARCHAR(255)');
+            };
             const lines = [];
+            const alters = [];
             this.tables.forEach((t) => {
                 lines.push(`CREATE TABLE ${q(t.name)} (`);
                 const defs = t.columns.map((c) => {
-                    let d = `  ${q(c.name)} ${SQL_TYPE[c.type] || 'VARCHAR(255)'}`;
-                    if (c.pk && c.type === 'id') d += ' AUTO_INCREMENT';
+                    let d = `  ${q(c.name)} ${fkType(c) || typeMap[c.type] || 'VARCHAR(255)'}`;
+                    // Postgres auto-increment comes from the SERIAL type itself.
+                    if (!pg && c.pk && c.type === 'id') d += ' AUTO_INCREMENT';
                     d += c.nullable ? ' NULL' : ' NOT NULL';
                     if (c.default !== '' && c.default != null) d += ` DEFAULT ${c.default}`;
                     if (c.unique) d += ' UNIQUE';
@@ -973,21 +1064,30 @@ function schematicBuilder(initial) {
                 });
                 const pk = t.columns.filter((c) => c.pk).map((c) => q(c.name));
                 if (pk.length) defs.push(`  PRIMARY KEY (${pk.join(', ')})`);
+                lines.push(defs.join(',\n'));
+                lines.push(');\n');
+                // Foreign keys are emitted as ALTER TABLE after every table exists,
+                // so forward / circular references never fail with "relation does
+                // not exist" the way inline CREATE-TABLE FKs would.
                 t.columns.filter((c) => c.fk).forEach((c) => {
                     const tgt = this.tables.find((x) => x.id === c.fk.table);
                     if (!tgt) return;
-                    let fk = `  FOREIGN KEY (${q(c.name)}) REFERENCES ${q(tgt.name)} (${q(c.fk.column)})`;
+                    // Postgres can only reference a primary-key or unique column —
+                    // skip FKs whose target isn't one, instead of emitting SQL that
+                    // fails with "no unique constraint matching given keys".
+                    const col = tgt.columns.find((x) => x.name === c.fk.column);
+                    if (!col || !(col.pk || col.unique)) return;
+                    let fk = `ALTER TABLE ${q(t.name)} ADD FOREIGN KEY (${q(c.name)})`
+                        + ` REFERENCES ${q(tgt.name)} (${q(c.fk.column)})`;
                     const del = (c.fk.onDelete || '').toUpperCase();
                     const upd = (c.fk.onUpdate || '').toUpperCase();
                     if (del && del !== 'NO ACTION') fk += ` ON DELETE ${del}`;
                     if (upd && upd !== 'NO ACTION') fk += ` ON UPDATE ${upd}`;
-                    defs.push(fk);
+                    alters.push(fk + ';');
                 });
-                lines.push(defs.join(',\n'));
-                lines.push(');\n');
             });
-            this._download(lines.join('\n'), '.sql', 'text/sql');
-            this.toast('Exported schema.sql');
+            this._download([...lines, ...alters].join('\n'), '.sql', 'text/sql');
+            this.toast(pg ? 'Exported schema.sql (PostgreSQL)' : 'Exported schema.sql (MySQL)');
         },
         // Laravel migration export — one Schema::create() per table, with constrained() FKs.
         exportMigration() {
@@ -1030,6 +1130,126 @@ function schematicBuilder(initial) {
             const body = blocks.join('\n\n');
             const text = `<?php\n\nuse Illuminate\\Database\\Migrations\\Migration;\nuse Illuminate\\Database\\Schema\\Blueprint;\nuse Illuminate\\Support\\Facades\\Schema;\n\nreturn new class extends Migration\n{\n    public function up(): void\n    {\n${body}\n    }\n\n    public function down(): void\n    {\n${this.tables.slice().reverse().map((t) => `        Schema::dropIfExists('${t.name}');`).join('\n')}\n    }\n};\n`;
             this._exportZip(text);
+        },
+        // Native JSON export — the exact canvas payload, re-importable losslessly
+        // (positions, colors, groups, FK metadata all round-trip).
+        exportJson() {
+            this._download(JSON.stringify(this.payload(), null, 2), '.json', 'application/json');
+            this.toast('Exported schema.json');
+        },
+        // DBML export — dbdiagram.io-compatible: Table blocks, standalone Refs for
+        // foreign keys, and TableGroup blocks from the canvas's geometric groups.
+        exportDbml() {
+            const DBML_TYPE = {
+                id: 'bigint', bigInteger: 'bigint', unsignedBigInteger: 'bigint', integer: 'int',
+                string: 'varchar', text: 'text', boolean: 'boolean', date: 'date', datetime: 'datetime',
+                timestamp: 'timestamp', json: 'json', decimal: 'decimal', float: 'float', uuid: 'uuid',
+            };
+            // Quote identifiers that aren't simple words (DBML allows "two words").
+            const ident = (s) => /^[A-Za-z_]\w*$/.test(s) ? s : '"' + String(s).replace(/"/g, '\\"') + '"';
+            const fmtDefault = (v) => {
+                const s = String(v);
+                if (/^-?\d+(\.\d+)?$/.test(s)) return s;
+                if (/^(true|false|null)$/i.test(s)) return s.toLowerCase();
+                return "'" + s.replace(/'/g, "\\'") + "'";
+            };
+            const lines = [];
+            this.tables.forEach((t) => {
+                lines.push(`Table ${ident(t.name)} {`);
+                t.columns.forEach((c) => {
+                    const settings = [];
+                    if (c.pk) settings.push('pk');
+                    if (c.type === 'id') settings.push('increment');
+                    if (c.unique && !c.pk) settings.push('unique');
+                    if (!c.nullable && !c.pk) settings.push('not null');
+                    if (c.default !== '' && c.default != null) settings.push('default: ' + fmtDefault(c.default));
+                    const set = settings.length ? ` [${settings.join(', ')}]` : '';
+                    lines.push(`  ${ident(c.name)} ${DBML_TYPE[c.type] || 'varchar'}${set}`);
+                });
+                lines.push('}', '');
+            });
+            // Foreign keys as standalone Refs: child.col > parent.col (- for 1:1).
+            this.tables.forEach((t) => {
+                t.columns.filter((c) => c.fk).forEach((c) => {
+                    const tgt = this.tables.find((x) => x.id === c.fk.table);
+                    if (!tgt) return;
+                    const op = c.fk.type === '1:1' ? '-' : '>';
+                    lines.push(`Ref: ${ident(t.name)}.${ident(c.name)} ${op} ${ident(tgt.name)}.${ident(c.fk.column || 'id')}`);
+                });
+            });
+            // Groups -> TableGroup, by the same center-in-rect membership the canvas uses.
+            this.groups.forEach((g) => {
+                const members = this.tablesInGroup(g);
+                if (!members.length) return;
+                lines.push('', `TableGroup ${ident(g.name)} {`);
+                members.forEach((t) => lines.push(`  ${ident(t.name)}`));
+                lines.push('}');
+            });
+            this._download(lines.join('\n').replace(/\n+$/, '\n'), '.dbml', 'text/plain');
+            this.toast('Exported schema.dbml');
+        },
+        // Prisma export — one `model` block per table. The Laravel snake_case table
+        // name is a valid Prisma identifier, so it doubles as the model name (no
+        // @@map needed) and round-trips losslessly through parsePrismaSchema().
+        // Each FK emits its scalar column + a relation field; the parent gets the
+        // matching back-reference (list for 1:N, optional single for 1:1).
+        exportPrisma() {
+            const P_TYPE = {
+                id: 'BigInt', bigInteger: 'BigInt', unsignedBigInteger: 'BigInt', integer: 'Int',
+                string: 'String', text: 'String', boolean: 'Boolean', date: 'DateTime',
+                datetime: 'DateTime', timestamp: 'DateTime', json: 'Json', decimal: 'Decimal',
+                float: 'Float', uuid: 'String',
+            };
+            const ON = { 'cascade': 'Cascade', 'restrict': 'Restrict', 'set null': 'SetNull', 'no action': 'NoAction' };
+            const fmtDef = (c) => {
+                const v = String(c.default);
+                if (c.type === 'boolean') return /^(1|true)$/i.test(v) ? 'true' : 'false';
+                if (/^-?\d+(\.\d+)?$/.test(v)) return v;
+                if (/^(now\(\)|current_timestamp)$/i.test(v)) return 'now()';
+                if (/^uuid\(\)$/i.test(v)) return 'uuid()';
+                return '"' + v.replace(/"/g, '\\"') + '"';
+            };
+            const lines = ['// Generated by Schematic — Prisma schema', ''];
+            this.tables.forEach((t) => {
+                // Relation field names live in the same namespace as columns; keep unique.
+                const used = new Set(t.columns.map((c) => c.name));
+                const uniq = (base) => { let n = base, i = 2; while (used.has(n)) n = base + i++; used.add(n); return n; };
+                lines.push(`model ${t.name} {`);
+                t.columns.forEach((c) => {
+                    let line = `  ${c.name} ${P_TYPE[c.type] || 'String'}`;
+                    if (c.nullable && !c.pk) line += '?';
+                    const attrs = [];
+                    if (c.pk) attrs.push('@id');
+                    if (c.type === 'id') attrs.push('@default(autoincrement())');
+                    if (c.unique && !c.pk) attrs.push('@unique');
+                    if (c.type === 'text') attrs.push('@db.Text');
+                    if (c.type !== 'id' && c.default !== '' && c.default != null) attrs.push(`@default(${fmtDef(c)})`);
+                    if (attrs.length) line += ' ' + attrs.join(' ');
+                    lines.push(line);
+                    if (c.fk) {
+                        const tgt = this.tables.find((x) => x.id === c.fk.table);
+                        if (tgt) {
+                            const fld = uniq(this._camel(this._singular(tgt.name)));
+                            let rel = `  ${fld} ${tgt.name}${c.nullable ? '?' : ''} @relation(fields: [${c.name}], references: [${c.fk.column || 'id'}]`;
+                            const del = ON[(c.fk.onDelete || '').toLowerCase()];
+                            const upd = ON[(c.fk.onUpdate || '').toLowerCase()];
+                            if (del) rel += `, onDelete: ${del}`;
+                            if (upd) rel += `, onUpdate: ${upd}`;
+                            lines.push(rel + ')');
+                        }
+                    }
+                });
+                // Back-references: child tables whose FK points at this one.
+                this.tables.forEach((ot) => {
+                    ot.columns.filter((c) => c.fk && c.fk.table === t.id).forEach((c) => {
+                        if (c.fk.type === '1:1') lines.push(`  ${uniq(this._camel(this._singular(ot.name)))} ${ot.name}?`);
+                        else lines.push(`  ${uniq(this._camel(ot.name))} ${ot.name}[]`);
+                    });
+                });
+                lines.push('}', '');
+            });
+            this._download(lines.join('\n').replace(/\n+$/, '\n'), '.prisma', 'text/plain');
+            this.toast('Exported schema.prisma');
         },
 
         // ----- Eloquent model export -----
@@ -1143,12 +1363,20 @@ function schematicBuilder(initial) {
             const el = this.$refs.importFile;
             if (el) { el.value = ''; el.click(); }
         },
-        // Read the chosen .sql file and hand its text to the parser.
+        // Read the chosen file and route it by extension: .json restores a
+        // Schematic export, anything else is parsed as SQL CREATE TABLE.
         importFile(e) {
             const file = e.target.files && e.target.files[0];
             if (!file) return;
+            const isJson = /\.json$/i.test(file.name) || file.type === 'application/json';
+            const isPrisma = /\.prisma$/i.test(file.name);
             const reader = new FileReader();
-            reader.onload = () => this.importSql(reader.result || '');
+            reader.onload = () => {
+                const text = reader.result || '';
+                if (isJson) this.importJson(text);
+                else if (isPrisma) this.importPrisma(text);
+                else this.importSql(text);
+            };
             reader.onerror = () => this.toast('Could not read file');
             reader.readAsText(file);
         },
@@ -1157,7 +1385,21 @@ function schematicBuilder(initial) {
             let parsed;
             try { parsed = parseSqlSchema(text); }
             catch (err) { this.toast('Import failed: ' + err.message); return; }
-            if (!parsed.length) { this.toast('No CREATE TABLE statements found'); return; }
+            this._addParsedTables(parsed, { emptyMsg: 'No CREATE TABLE statements found' });
+        },
+        // Parse a schema.prisma file's model blocks and add them to the canvas.
+        importPrisma(text) {
+            let parsed;
+            try { parsed = parsePrismaSchema(text); }
+            catch (err) { this.toast('Import failed: ' + err.message); return; }
+            this._addParsedTables(parsed, { emptyMsg: 'No Prisma models found', label: 'Prisma' });
+        },
+        // Shared back-end for the SQL / Prisma importers: take parsed
+        // [{name, columns:[{name,type,nullable,pk,unique,default,fk:{table:<name>,...}}]}]
+        // (FK target is a table NAME), remap to fresh client ids, lay out in free
+        // space below existing content, and re-link foreign keys.
+        _addParsedTables(parsed, { emptyMsg, label } = {}) {
+            if (!parsed.length) { this.toast(emptyMsg || 'Nothing to import'); return; }
 
             // Map imported table names → fresh client ids so FKs can be re-linked.
             const nameToId = {};
@@ -1183,7 +1425,7 @@ function schematicBuilder(initial) {
                         col.fk = {
                             table: nameToId[c.fk.table.toLowerCase()],
                             column: c.fk.column || 'id',
-                            type: '1:N',
+                            type: c.fk.type === '1:1' ? '1:1' : '1:N',
                             onDelete: c.fk.onDelete || (c.nullable ? 'set null' : 'cascade'),
                             onUpdate: c.fk.onUpdate || 'no action',
                         };
@@ -1194,7 +1436,84 @@ function schematicBuilder(initial) {
 
             this.tables = [...this.tables, ...imported];
             this.$nextTick(() => this.fitToScreen());
-            this.toast(`Imported ${imported.length} table${imported.length === 1 ? '' : 's'}`);
+            const suffix = label ? ' from ' + label : '';
+            this.toast(`Imported ${imported.length} table${imported.length === 1 ? '' : 's'}${suffix}`);
+        },
+        // Restore a project exported via exportJson(). Regenerates client ids so
+        // it merges cleanly, re-links FKs, and (when the canvas already has
+        // content) shifts the imported set below it without overlap.
+        importJson(text) {
+            let data;
+            try { data = JSON.parse(text); }
+            catch { this.toast('Import failed: invalid JSON'); return; }
+
+            const tablesIn = Array.isArray(data && data.tables) ? data.tables.filter(Boolean) : null;
+            if (!tablesIn) { this.toast('Not a Schematic JSON export'); return; }
+
+            const empty = !this.tables.length && !this.groups.length;
+
+            // Fresh table ids; FK columns reference a table by id, so build a remap.
+            const idMap = {};
+            tablesIn.forEach((t) => { if (t && t.id != null) idMap[t.id] = uid('t'); });
+
+            const tables = tablesIn.map((t, i) => ({
+                id: idMap[t.id] || uid('t'),
+                name: String((t && t.name) || 'table_' + (i + 1)),
+                color: COLOR_KEYS.includes(t && t.color) ? t.color : COLOR_KEYS[i % COLOR_KEYS.length],
+                x: Number.isFinite(t && t.x) ? t.x : 80,
+                y: Number.isFinite(t && t.y) ? t.y : 80,
+                indexes: Array.isArray(t && t.indexes) ? t.indexes : [],
+                columns: (Array.isArray(t && t.columns) ? t.columns : []).map((c) => {
+                    const col = blankColumn(String((c && c.name) || 'column'), String((c && c.type) || 'string'));
+                    col.nullable = !!c.nullable; col.pk = !!c.pk;
+                    col.unique = !!c.unique; col.index = !!c.index;
+                    col.default = c.default != null ? String(c.default) : '';
+                    // FK target table is a client id — remap it; drop if it points outside this import.
+                    if (c.fk && c.fk.table != null && idMap[c.fk.table]) {
+                        col.fk = {
+                            table: idMap[c.fk.table],
+                            column: c.fk.column || 'id',
+                            type: c.fk.type === '1:1' ? '1:1' : '1:N',
+                            onDelete: c.fk.onDelete || (c.nullable ? 'set null' : 'cascade'),
+                            onUpdate: c.fk.onUpdate || 'no action',
+                        };
+                    }
+                    return col;
+                }),
+            }));
+
+            const groups = (Array.isArray(data.groups) ? data.groups.filter(Boolean) : []).map((g, i) => ({
+                id: uid('g'),
+                name: String((g && g.name) || 'Group'),
+                color: COLOR_KEYS.includes(g && g.color) ? g.color : COLOR_KEYS[i % COLOR_KEYS.length],
+                x: Number.isFinite(g && g.x) ? g.x : 80,
+                y: Number.isFinite(g && g.y) ? g.y : 80,
+                w: Number.isFinite(g && g.w) ? g.w : 380,
+                h: Number.isFinite(g && g.h) ? g.h : 280,
+            }));
+
+            if (!tables.length && !groups.length) { this.toast('Nothing to import'); return; }
+
+            if (!empty) {
+                // Shift the whole imported set below existing content, layout intact.
+                const items = [...tables, ...groups];
+                const minY = Math.min(...items.map((it) => it.y));
+                const baseY = Math.max(
+                    ...this.tables.map((t) => t.y + cardHeight(t)),
+                    ...this.groups.map((g) => g.y + g.h),
+                    0,
+                ) + 60;
+                const dy = baseY - minY;
+                tables.forEach((t) => { t.y += dy; });
+                groups.forEach((g) => { g.y += dy; });
+            } else if (data.name) {
+                this.projectName = String(data.name);
+            }
+
+            this.tables = [...this.tables, ...tables];
+            this.groups = [...this.groups, ...groups];
+            this.$nextTick(() => this.fitToScreen());
+            this.toast(`Imported ${tables.length} table${tables.length === 1 ? '' : 's'} from JSON`);
         },
     };
 }
@@ -1316,6 +1635,93 @@ function parseSqlSchema(sql) {
     return tables;
 }
 
+// ---------- Prisma import parser ----------
+// Best-effort reverse of exportPrisma(): turn `model` blocks into table objects.
+// Model name == table name (Schematic emits snake_case names verbatim). Fields
+// whose type is another model are relations: a `[]` list is a back-reference
+// (skipped), a single relation field carries the @relation(fields/references)
+// that attaches an FK to its scalar column.
+function prismaTypeToLaravel(t, attrs) {
+    switch (t) {
+        case 'BigInt': return 'bigInteger';
+        case 'Int': return 'integer';
+        case 'String': return /@db\.Text/i.test(attrs) ? 'text' : 'string';
+        case 'Boolean': return 'boolean';
+        case 'DateTime': return 'datetime';
+        case 'Json': return 'json';
+        case 'Decimal': return 'decimal';
+        case 'Float': return 'float';
+        default: return 'string';
+    }
+}
+const PRISMA_ACTION = { Cascade: 'cascade', Restrict: 'restrict', SetNull: 'set null', NoAction: 'no action' };
+function parsePrismaSchema(src) {
+    const clean = src.replace(/\/\/.*$/gm, ''); // strip line + /// doc comments
+    const modelRe = /model\s+(\w+)\s*\{([\s\S]*?)\}/g;
+    const raw = [];
+    let m;
+    while ((m = modelRe.exec(clean)) !== null) raw.push({ name: m[1], body: m[2] });
+    const modelNames = new Set(raw.map((r) => r.name));
+
+    return raw.map((r) => {
+        const cols = [];
+        const byName = {};
+        const relations = []; // {localField, refModel, refColumn, onDelete, onUpdate}
+        r.body.split('\n').forEach((rawLine) => {
+            const line = rawLine.trim();
+            if (!line || line.startsWith('@@')) return;
+            const fm = line.match(/^(\w+)\s+([A-Za-z_]\w*)(\[\])?(\?)?(.*)$/);
+            if (!fm) return;
+            const fname = fm[1], ftype = fm[2], isList = !!fm[3], optional = !!fm[4], attrs = fm[5] || '';
+
+            if (modelNames.has(ftype)) {
+                if (isList) return; // back-reference list — not a column
+                const rel = attrs.match(/@relation\(([^)]*)\)/);
+                if (rel) {
+                    const fields = (rel[1].match(/fields:\s*\[([^\]]*)\]/) || [])[1];
+                    const refs = (rel[1].match(/references:\s*\[([^\]]*)\]/) || [])[1];
+                    const del = (rel[1].match(/onDelete:\s*(\w+)/) || [])[1];
+                    const upd = (rel[1].match(/onUpdate:\s*(\w+)/) || [])[1];
+                    if (fields) relations.push({
+                        localField: fields.split(',')[0].trim(),
+                        refModel: ftype,
+                        refColumn: refs ? refs.split(',')[0].trim() : 'id',
+                        onDelete: del ? PRISMA_ACTION[del] : null,
+                        onUpdate: upd ? PRISMA_ACTION[upd] : null,
+                    });
+                }
+                return;
+            }
+
+            const col = {
+                name: fname,
+                type: prismaTypeToLaravel(ftype, attrs),
+                nullable: optional,
+                pk: /@id\b/.test(attrs),
+                unique: /@unique\b/.test(attrs),
+                default: '',
+                fk: null,
+            };
+            if (/@default\(\s*autoincrement\(\)\s*\)/.test(attrs)) {
+                col.type = 'id'; col.pk = true; col.nullable = false;
+            } else {
+                const d = attrs.match(/@default\(([^)]*)\)/);
+                if (d) col.default = d[1].trim().replace(/^["']|["']$/g, '');
+            }
+            cols.push(col);
+            byName[fname.toLowerCase()] = col;
+        });
+
+        // Attach parsed relations to their scalar FK columns.
+        relations.forEach((rel) => {
+            const col = byName[rel.localField.toLowerCase()];
+            if (col) col.fk = { table: rel.refModel, column: rel.refColumn, onDelete: rel.onDelete, onUpdate: rel.onUpdate };
+        });
+
+        return { name: r.name, columns: cols };
+    }).filter((t) => t.columns.length);
+}
+
 // ---------- dashboard component ----------
 const RECENTS_KEY = 'schematic.recents';
 const RECENTS_MAX = 12;
@@ -1328,9 +1734,11 @@ function loadRecents() {
     }
 }
 
-function schematicDashboard(projects) {
+function schematicDashboard(projects, atLimit, projectLimit) {
     return {
         projects: projects || [],
+        atLimit: atLimit || false,
+        projectLimit: projectLimit || 0,
         tab: 'All',
         q: '',
         tabs: ['All', 'Recent', 'Favorites', 'Shared with me', 'Archived'],
