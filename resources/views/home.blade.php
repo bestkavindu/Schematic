@@ -75,9 +75,9 @@
 <section class="hero">
   <div class="hero-grid-bg"></div>
   <div class="hero-inner">
-    <span class="eyebrow"><span class="pill">NEW</span> Schema diffing &amp; migration preview</span>
-    <h1 class="hero-title">Design your database<br>visually. Ship <span class="grad">clean migrations</span> in minutes.</h1>
-    <p class="hero-sub">Schematic is the visual schema builder for modern dev teams. Drag out tables, draw relationships, and export to SQL, Laravel, Prisma, and more — no more second-guessing your foreign keys.</p>
+    <span class="eyebrow"><span class="pill">NEW</span> Push schemas straight to Postgres &amp; Supabase</span>
+    <h1 class="hero-title">Design your database<br>visually. Ship to <span class="grad">SQL, Prisma &amp; Supabase</span> in minutes.</h1>
+    <p class="hero-sub">Schematic is the visual schema builder for modern dev teams. Drag out tables, draw relationships, then export to MySQL, PostgreSQL, Laravel, Prisma, or DBML — or push straight to a Supabase database. No more second-guessing your foreign keys.</p>
     <div class="hero-cta">
       <a class="btn btn-primary btn-lg" href="{{ $tryUrl }}">Start building — no sign-up</a>
       <a class="btn btn-ghost btn-lg" href="{{ $tryUrl }}">
@@ -198,8 +198,17 @@
 
       <div class="cell span-2 reveal">
         <div class="cell-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg></div>
-        <h3>One-click export</h3>
-        <p>Generate timestamped migration files or raw SQL for MySQL, Postgres, and SQLite.</p>
+        <h3>Export anywhere — or push live</h3>
+        <p>One click gives you MySQL or PostgreSQL DDL, Laravel migrations, Prisma, DBML, or JSON — or push your schema straight into a Postgres / Supabase database.</p>
+        <div class="type-chips">
+          <span class="type-chip">MySQL</span>
+          <span class="type-chip">PostgreSQL</span>
+          <span class="type-chip">Laravel</span>
+          <span class="type-chip">Prisma</span>
+          <span class="type-chip">DBML</span>
+          <span class="type-chip">JSON</span>
+          <span class="type-chip on">Push&nbsp;→&nbsp;Supabase</span>
+        </div>
       </div>
 
       <div class="cell span-2 reveal">
@@ -282,14 +291,14 @@
       <div class="step reveal">
         <div class="step-num">3</div>
         <h3>Export &amp; ship</h3>
-        <p>Download ready-to-run migration files or copy the SQL. Drop them into your repo and migrate.</p>
+        <p>Download ready-to-run migrations, SQL, Prisma, or DBML — or push your schema straight to Supabase. Drop it in your repo and migrate.</p>
       </div>
     </div>
 
     <div class="stats reveal mt-xl">
       <div class="stat"><div class="stat-n">12k+</div><div class="stat-l">Schemas designed</div></div>
       <div class="stat"><div class="stat-n">40+</div><div class="stat-l">Column types</div></div>
-      <div class="stat"><div class="stat-n">3</div><div class="stat-l">SQL dialects</div></div>
+      <div class="stat"><div class="stat-n">6</div><div class="stat-l">Export formats</div></div>
       <div class="stat"><div class="stat-n">&lt;5 min</div><div class="stat-l">To first migration</div></div>
     </div>
   </div>
@@ -361,7 +370,7 @@
       <div class="footer-col"><h4>Product</h4><a href="#features">Features</a><a href="#pricing">Pricing</a><a href="{{ $tryUrl }}">Live demo</a><a href="#">Changelog</a></div>
       <div class="footer-col"><h4>Resources</h4><a href="#">Documentation</a><a href="#">Export formats</a><a href="#">Templates</a><a href="#">API</a></div>
       <div class="footer-col"><h4>Company</h4><a href="#">About</a><a href="#">Blog</a><a href="#">Careers</a><a href="#">Contact</a></div>
-      <div class="footer-col"><h4>Legal</h4><a href="#">Privacy</a><a href="#">Terms</a><a href="#">Security</a></div>
+      <div class="footer-col"><h4>Legal</h4><a href="{{ route('legal.privacy') }}">Privacy</a><a href="{{ route('legal.terms') }}">Terms</a><a href="#">Security</a></div>
     </div>
     <div class="footer-bot">
       <span class="copy">© 2026 Schematic Labs. All rights reserved.</span>

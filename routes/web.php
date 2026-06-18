@@ -7,6 +7,9 @@ use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'home')->name('home');
 
+Route::view('terms', 'legal.terms')->name('legal.terms');
+Route::view('privacy', 'legal.privacy')->name('legal.privacy');
+
 // Public, no-account sandbox — anyone can try the builder.
 Route::livewire('demo', SchemaDemo::class)->name('schemas.demo');
 
