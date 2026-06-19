@@ -153,6 +153,24 @@ img, svg { display: block; }
 .nav-cta { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 /* CTA arrow nudge already handled by existing .btn-primary:hover svg rule */
 
+/* ---- authed: "Your diagrams" pill + account avatar ---- */
+.nav-diagrams { gap: 9px; font-weight: 540; }
+.nav-diagrams svg { color: var(--accent-2); transition: transform .18s ease; }
+.nav-diagrams:hover svg { transform: none; }   /* override generic arrow nudge */
+
+.nav-avatar {
+  width: 38px; height: 38px; flex-shrink: 0;
+  display: grid; place-items: center; border-radius: 50%;
+  font-size: 13px; font-weight: 640; letter-spacing: .01em; color: #fff;
+  background: linear-gradient(150deg, #6366f1, #4f46e5);
+  box-shadow: 0 2px 8px -1px rgba(79,70,229,.5), inset 0 0 0 1px rgba(255,255,255,.12);
+  transition: transform .2s cubic-bezier(.34,1.56,.64,1), box-shadow .2s ease;
+}
+.nav-avatar:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px -2px rgba(79,70,229,.6), inset 0 0 0 1px rgba(255,255,255,.2);
+}
+
 /* ---- focus-visible (all interactive nav elements) ---- */
 .nav a:focus-visible,
 .nav button:focus-visible,

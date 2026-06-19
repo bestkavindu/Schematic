@@ -139,9 +139,20 @@
 
     <div class="nav-cta">
       @auth
-        <a class="btn btn-primary btn-sm" href="{{ route('schemas.index') }}">Your diagrams
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+        @php
+          $navUser = auth()->user();
+          $navInitials = collect(preg_split('/\s+/', trim((string) $navUser->name)))
+              ->filter()
+              ->take(2)
+              ->map(fn ($w) => mb_strtoupper(mb_substr($w, 0, 1)))
+              ->implode('');
+          $navInitials = $navInitials !== '' ? $navInitials : mb_strtoupper(mb_substr((string) $navUser->email, 0, 1));
+        @endphp
+        <a class="btn btn-ghost btn-sm nav-diagrams" href="{{ route('schemas.index') }}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.6"/><rect x="3" y="14" width="7" height="7" rx="1.6"/><rect x="14" y="14" width="7" height="7" rx="1.6"/></svg>
+          Your diagrams
         </a>
+        <a class="nav-avatar" href="{{ route('profile.edit') }}" aria-label="{{ $navUser->name ?: $navUser->email }} — account">{{ $navInitials }}</a>
       @else
         <a class="btn btn-ghost btn-sm" href="{{ $signInUrl }}">Sign in</a>
         <a class="btn btn-primary btn-sm" href="{{ $tryUrl }}">Open app
