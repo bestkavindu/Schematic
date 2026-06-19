@@ -47,6 +47,7 @@
       <a class="nav-link" href="{{ route('home') }}#features">Features</a>
       <a class="nav-link" href="{{ route('home') }}#how">How it works</a>
       <a class="nav-link" href="{{ route('home') }}#pricing">Pricing</a>
+      <a class="nav-link is-active" href="{{ route('contact') }}" aria-current="true">Contact</a>
       <a class="nav-link" href="{{ route('schemas.demo') }}">Live demo</a>
     </nav>
     <div class="nav-spacer"></div>
@@ -65,6 +66,7 @@
   <a href="{{ route('home') }}#features">Features</a>
   <a href="{{ route('home') }}#how">How it works</a>
   <a href="{{ route('home') }}#pricing">Pricing</a>
+  <a href="{{ route('contact') }}" aria-current="true">Contact</a>
   <a href="{{ route('schemas.demo') }}">Live demo</a>
   <a class="btn btn-primary" href="{{ $tryUrl }}">Open app</a>
 </div>

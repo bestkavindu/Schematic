@@ -129,6 +129,14 @@ img, svg { display: block; }
 .nav-link[aria-current="true"] { color: var(--ink); font-weight: 540; }
 .nav-link[aria-current="true"]::after { transform: scaleX(0); } /* pill, not underline */
 
+/* static active pill — for standalone pages (e.g. Contact) with no sliding scroll-spy pill */
+.nav-link.is-active {
+  color: var(--ink); font-weight: 540;
+  background: var(--bg-3);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.nav-link.is-active::after { transform: scaleX(0); }
+
 /* the sliding pill itself */
 .nav-pill {
   position: absolute; top: 50%; left: 0; z-index: 0;
