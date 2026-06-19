@@ -34,42 +34,7 @@
 </head>
 <body>
 
-<!-- ============ NAV ============ -->
-<header class="nav" id="nav">
-  <div class="nav-inner">
-    <a class="brand" href="{{ route('home') }}">
-      <span class="brand-logo">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.7 4 3 9 3s9-1.3 9-3V5"/><path d="M3 12c0 1.7 4 3 9 3s9-1.3 9-3"/></svg>
-      </span>
-      Schematic
-    </a>
-    <nav class="nav-links">
-      <a class="nav-link" href="{{ route('home') }}#features">Features</a>
-      <a class="nav-link" href="{{ route('home') }}#how">How it works</a>
-      <a class="nav-link" href="{{ route('home') }}#pricing">Pricing</a>
-      <a class="nav-link is-active" href="{{ route('contact') }}" aria-current="true">Contact</a>
-      <a class="nav-link" href="{{ route('schemas.demo') }}">Live demo</a>
-    </nav>
-    <div class="nav-spacer"></div>
-    <div class="nav-cta">
-      <a class="btn btn-ghost btn-sm" href="{{ route('home') }}">Home</a>
-      <a class="btn btn-primary btn-sm" href="{{ $tryUrl }}">Open app
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
-      </a>
-    </div>
-    <button class="nav-toggle" id="navToggle" aria-label="Menu">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
-    </button>
-  </div>
-</header>
-<div class="mobile-menu" id="mobileMenu">
-  <a href="{{ route('home') }}#features">Features</a>
-  <a href="{{ route('home') }}#how">How it works</a>
-  <a href="{{ route('home') }}#pricing">Pricing</a>
-  <a href="{{ route('contact') }}" aria-current="true">Contact</a>
-  <a href="{{ route('schemas.demo') }}">Live demo</a>
-  <a class="btn btn-primary" href="{{ $tryUrl }}">Open app</a>
-</div>
+@include('partials.landing-nav', ['navBase' => route('home'), 'navActive' => 'contact'])
 
 <!-- ============ HEADER ============ -->
 <section class="contact-hero">
