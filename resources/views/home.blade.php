@@ -14,6 +14,99 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Schematic — The visual database schema builder</title>
 
+{{-- ============ SEO / META ============ --}}
+<meta name="description" content="Design your database schema visually. Schematic is a free online ERD tool — drag tables, export to MySQL, PostgreSQL, Laravel, Prisma, DBML or Supabase." />
+<meta name="author" content="Schematic Labs" />
+<meta name="robots" content="index, follow" />
+<link rel="canonical" href="{{ url('/') }}" />
+
+<meta name="theme-color" content="#5b5bd6" />
+<meta name="color-scheme" content="light" />
+<meta name="format-detection" content="telephone=no" />
+<meta name="referrer" content="strict-origin-when-cross-origin" />
+
+{{-- ---------- Open Graph ---------- --}}
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Schematic" />
+<meta property="og:title" content="Schematic — Design your database visually" />
+<meta property="og:description" content="A free online ERD tool and visual database schema builder. Drag tables, draw relationships, then export to MySQL, PostgreSQL, Laravel, Prisma, DBML or push to Supabase." />
+<meta property="og:url" content="{{ url('/') }}" />
+<meta property="og:image" content="{{ url('og.png') }}" />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="Schematic — visual database schema builder. Tables and relationships on a light ERD canvas with an indigo accent." />
+<meta property="og:locale" content="{{ str_replace('-', '_', app()->getLocale()) }}" />
+
+{{-- ---------- Twitter / X ---------- --}}
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Schematic — Design your database visually" />
+<meta name="twitter:description" content="A free online ERD tool and visual database schema builder. Export to MySQL, PostgreSQL, Laravel, Prisma, DBML or push to Supabase." />
+<meta name="twitter:image" content="{{ url('og.png') }}" />
+<meta name="twitter:image:alt" content="Schematic — visual database schema builder." />
+
+{{-- ============ JSON-LD STRUCTURED DATA ============ --}}
+@php
+    $appUrl  = rtrim(config('app.url'), '/');
+    $homeUrl = url('/');
+    $logoUrl = $appUrl . '/logo.png';
+    $imgUrl  = $appUrl . '/og.png';
+
+    $ldOrganization = [
+        '@context'    => 'https://schema.org',
+        '@type'       => 'Organization',
+        'name'        => 'Schematic Labs',
+        'url'         => $homeUrl,
+        'logo'        => [
+            '@type'  => 'ImageObject',
+            'url'    => $logoUrl,
+            'width'  => 512,
+            'height' => 512,
+        ],
+        'description' => 'Schematic Labs builds Schematic — the visual database schema builder for developers.',
+    ];
+
+    $ldSoftwareApplication = [
+        '@context'            => 'https://schema.org',
+        '@type'               => 'WebApplication',
+        'name'                => 'Schematic',
+        'description'         => 'Schematic is a free online ERD tool and visual database schema builder. Drag out tables, draw entity-relationship diagrams on a canvas, then export to MySQL, PostgreSQL, Laravel migrations, Prisma, DBML or JSON, or push straight to PostgreSQL and Supabase.',
+        'url'                 => $homeUrl,
+        'applicationCategory' => 'DeveloperApplication',
+        'operatingSystem'     => 'All',
+        'browserRequirements' => 'Requires JavaScript. Runs in any modern browser.',
+        'image'               => $imgUrl,
+        'softwareHelp'        => $homeUrl,
+        'offers'              => [
+            '@type'         => 'Offer',
+            'price'         => '0',
+            'priceCurrency' => 'USD',
+            'url'           => $homeUrl,
+        ],
+        'publisher'           => [
+            '@type' => 'Organization',
+            'name'  => 'Schematic Labs',
+            'url'   => $homeUrl,
+        ],
+    ];
+
+    $ldWebSite = [
+        '@context'  => 'https://schema.org',
+        '@type'     => 'WebSite',
+        'name'      => 'Schematic',
+        'url'       => $homeUrl,
+        'publisher' => [
+            '@type' => 'Organization',
+            'name'  => 'Schematic Labs',
+        ],
+    ];
+
+    $jsonFlags = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
+@endphp
+<script type="application/ld+json">{!! json_encode($ldOrganization, $jsonFlags) !!}</script>
+<script type="application/ld+json">{!! json_encode($ldSoftwareApplication, $jsonFlags) !!}</script>
+<script type="application/ld+json">{!! json_encode($ldWebSite, $jsonFlags) !!}</script>
+
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 
@@ -317,7 +410,7 @@
   <div class="wrap">
     <div class="section-head reveal">
       <span class="tag">ABOUT US</span>
-      <h2>Built by <span class="grad">CodeMaster</span></h2>
+      <h2>Built by <span class="grad">Schematic Labs</span></h2>
       <p>We're a small product studio building SaaS applications and developer web tools that make everyday engineering faster. Schematic is one of them.</p>
     </div>
 
@@ -416,14 +509,14 @@
           <span class="brand-logo"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.7 4 3 9 3s9-1.3 9-3V5"/><path d="M3 12c0 1.7 4 3 9 3s9-1.3 9-3"/></svg></span>
           Schematic
         </a>
-        <p class="footer-brand-desc">The visual database schema builder for modern dev teams. A CodeMaster product.</p>
+        <p class="footer-brand-desc">The visual database schema builder for modern dev teams. A Schematic Labs product.</p>
       </div>
       <div class="footer-col"><h4>Product</h4><a href="#features">Features</a><a href="#how">How it works</a><a href="{{ $tryUrl }}">Live demo</a></div>
       <div class="footer-col"><h4>Company</h4><a href="#about">About</a></div>
       <div class="footer-col"><h4>Legal</h4><a href="{{ route('legal.privacy') }}">Privacy</a><a href="{{ route('legal.terms') }}">Terms</a></div>
     </div>
     <div class="footer-bot">
-      <span class="copy">© 2026 CodeMaster. All rights reserved.</span>
+      <span class="copy">© 2026 Schematic Labs. All rights reserved.</span>
     </div>
   </div>
 </footer>
