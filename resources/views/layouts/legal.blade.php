@@ -62,6 +62,7 @@
   .legal-back { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; text-decoration: none; margin-bottom: 18px; }
   .legal-back:hover { color: var(--ink-2); }
 </style>
+@stack('head')
 </head>
 <body>
 
@@ -77,6 +78,7 @@
     <div class="nav-spacer"></div>
     <div class="nav-cta">
       <a class="btn btn-ghost btn-sm" href="{{ route('home') }}">Home</a>
+      <a class="btn btn-ghost btn-sm" href="{{ route('contact') }}">Contact</a>
       <a class="btn btn-primary btn-sm" href="{{ $tryUrl }}">Open app
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
       </a>
@@ -91,7 +93,7 @@
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
       Back to home
     </a>
-    <div class="eyebrow">Legal</div>
+    <div class="eyebrow">@yield('eyebrow', 'Legal')</div>
     <h1>@yield('title')</h1>
     <p class="updated">Last updated @yield('updated')</p>
   </div>
@@ -116,7 +118,7 @@
         <p class="footer-brand-desc">The visual database schema builder for modern dev teams.</p>
       </div>
       <div class="footer-col"><h4>Product</h4><a href="{{ route('home') }}#features">Features</a><a href="{{ route('home') }}#pricing">Pricing</a><a href="{{ $tryUrl }}">Live demo</a></div>
-      <div class="footer-col"><h4>Company</h4><a href="{{ route('home') }}">About</a><a href="{{ route('home') }}">Contact</a></div>
+      <div class="footer-col"><h4>Company</h4><a href="{{ route('home') }}">About</a><a href="{{ route('contact') }}">Contact</a></div>
       <div class="footer-col"><h4>Legal</h4><a href="{{ route('legal.privacy') }}">Privacy</a><a href="{{ route('legal.terms') }}">Terms</a></div>
     </div>
     <div class="footer-bot">
