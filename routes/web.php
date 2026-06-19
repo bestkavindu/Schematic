@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Auth\SocialiteController;
 use App\Livewire\Schema\Builder as SchemaBuilder;
 use App\Livewire\Schema\Demo as SchemaDemo;
 use App\Livewire\Schema\Index as SchemaIndex;
@@ -35,6 +36,10 @@ Route::get('sitemap.xml', function () {
 
 // Public, no-account sandbox — anyone can try the builder.
 Route::livewire('demo', SchemaDemo::class)->name('schemas.demo');
+
+// Social login — Google + GitHub via Laravel Socialite. Provider is whitelisted in the controller.
+Route::get('auth/{provider}/redirect', [SocialiteController::class, 'redirect'])->name('socialite.redirect');
+Route::get('auth/{provider}/callback', [SocialiteController::class, 'callback'])->name('socialite.callback');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::livewire('schemas', SchemaIndex::class)->name('schemas.index');
