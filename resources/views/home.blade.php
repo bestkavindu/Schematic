@@ -512,7 +512,7 @@
         <p class="footer-brand-desc">The visual database schema builder for modern dev teams. A Schematic Labs product.</p>
       </div>
       <div class="footer-col"><h4>Product</h4><a href="#features">Features</a><a href="#how">How it works</a><a href="{{ $tryUrl }}">Live demo</a></div>
-      <div class="footer-col"><h4>Company</h4><a href="#about">About</a></div>
+      <div class="footer-col"><h4>Company</h4><a href="#about">About</a><a href="{{ route('contact') }}">Contact</a></div>
       <div class="footer-col"><h4>Legal</h4><a href="{{ route('legal.privacy') }}">Privacy</a><a href="{{ route('legal.terms') }}">Terms</a></div>
     </div>
     <div class="footer-bot">

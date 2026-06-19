@@ -11,6 +11,9 @@ Route::view('/', 'home')->name('home');
 Route::view('terms', 'legal.terms')->name('legal.terms');
 Route::view('privacy', 'legal.privacy')->name('legal.privacy');
 
+// Public contact form — embeds the ContactForm Livewire component.
+Route::view('contact', 'legal.contact')->name('contact');
+
 // SEO — robots + sitemap served dynamically so URLs always match the running host.
 Route::get('robots.txt', function () {
     $lines = [
