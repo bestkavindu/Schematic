@@ -8,6 +8,34 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>@yield('title') — Schematic</title>
 
+{{-- ============ SEO / META (per-page overridable) ============ --}}
+<meta name="description" content="@yield('description', 'Legal information for Schematic, the visual database schema builder by Schematic Labs.')" />
+<meta name="author" content="Schematic Labs" />
+<meta name="robots" content="@yield('robots', 'index, follow')" />
+<link rel="canonical" href="@yield('canonical', url()->current())" />
+
+<meta name="theme-color" content="#5b5bd6" />
+<meta name="color-scheme" content="light" />
+<meta name="format-detection" content="telephone=no" />
+
+{{-- Inherited Open Graph (overridable per page) --}}
+<meta property="og:type" content="article" />
+<meta property="og:site_name" content="Schematic" />
+<meta property="og:title" content="@yield('og_title', 'Schematic — Legal')" />
+<meta property="og:description" content="@yield('description', 'Legal information for Schematic by Schematic Labs.')" />
+<meta property="og:url" content="@yield('canonical', url()->current())" />
+<meta property="og:image" content="{{ url('og.png') }}" />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="Schematic — visual database schema builder." />
+<meta property="og:locale" content="{{ str_replace('-', '_', app()->getLocale()) }}" />
+
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="@yield('og_title', 'Schematic — Legal')" />
+<meta name="twitter:description" content="@yield('description', 'Legal information for Schematic by Schematic Labs.')" />
+<meta name="twitter:image" content="{{ url('og.png') }}" />
+
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 
