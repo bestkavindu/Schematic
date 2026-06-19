@@ -3,6 +3,10 @@
 @section('title', 'Privacy Policy')
 @section('updated', 'June 19, 2026')
 
+@section('description', 'Read the Privacy Policy for Schematic by Schematic Labs — what data we collect, how we use and protect it, and your privacy rights.')
+@section('og_title', 'Privacy Policy — Schematic')
+@section('canonical', route('legal.privacy'))
+
 @section('content')
   <p>This Privacy Policy explains how Schematic Labs ("we", "us") collects, uses, and protects your information when you use the Schematic website, applications, and services (the "Service"). By using the Service, you consent to the practices described here.</p>
 

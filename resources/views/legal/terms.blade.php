@@ -3,6 +3,10 @@
 @section('title', 'Terms of Service')
 @section('updated', 'June 19, 2026')
 
+@section('description', 'Read the Terms of Service for Schematic, the visual database schema builder by Schematic Labs — accounts, acceptable use, intellectual property and liability.')
+@section('og_title', 'Terms of Service — Schematic')
+@section('canonical', route('legal.terms'))
+
 @section('content')
   <p>Welcome to Schematic. These Terms of Service ("Terms") govern your access to and use of the Schematic website, applications, and services (collectively, the "Service") operated by Schematic Labs. By accessing or using the Service, you agree to be bound by these Terms. If you do not agree, do not use the Service.</p>
 

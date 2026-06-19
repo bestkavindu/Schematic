@@ -10,6 +10,29 @@ Route::view('/', 'home')->name('home');
 Route::view('terms', 'legal.terms')->name('legal.terms');
 Route::view('privacy', 'legal.privacy')->name('legal.privacy');
 
+// SEO — robots + sitemap served dynamically so URLs always match the running host.
+Route::get('robots.txt', function () {
+    $lines = [
+        'User-agent: *',
+        'Allow: /',
+        '',
+        '# Keep authenticated, user-specific app routes out of the index',
+        'Disallow: /schemas',
+        'Disallow: /schemas/',
+        '',
+        'Sitemap: '.url('sitemap.xml'),
+    ];
+
+    return response(implode("\n", $lines)."\n")
+        ->header('Content-Type', 'text/plain; charset=UTF-8');
+})->name('robots');
+
+Route::get('sitemap.xml', function () {
+    return response()
+        ->view('sitemap')
+        ->header('Content-Type', 'application/xml');
+})->name('sitemap');
+
 // Public, no-account sandbox — anyone can try the builder.
 Route::livewire('demo', SchemaDemo::class)->name('schemas.demo');
 
