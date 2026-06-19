@@ -132,6 +132,7 @@
       <a class="nav-link" href="#features" data-spy="features">Features</a>
       <a class="nav-link" href="#how" data-spy="how">How it works</a>
       <a class="nav-link" href="#about" data-spy="about">About</a>
+      <a class="nav-link" href="{{ route('contact') }}">Contact</a>
       <a class="nav-link nav-link--demo" href="{{ $tryUrl }}">Live demo</a>
     </nav>
 
@@ -172,6 +173,7 @@
   <a href="#features">Features</a>
   <a href="#how">How it works</a>
   <a href="#about">About</a>
+  <a href="{{ route('contact') }}">Contact</a>
   <a href="{{ $tryUrl }}">Live demo</a>
   @auth
     <a class="btn btn-primary" href="{{ route('schemas.index') }}">Your diagrams</a>

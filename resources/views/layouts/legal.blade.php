@@ -78,6 +78,7 @@
     <div class="nav-spacer"></div>
     <div class="nav-cta">
       <a class="btn btn-ghost btn-sm" href="{{ route('home') }}">Home</a>
+      <a class="btn btn-ghost btn-sm" href="{{ route('contact') }}">Contact</a>
       <a class="btn btn-primary btn-sm" href="{{ $tryUrl }}">Open app
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
       </a>
