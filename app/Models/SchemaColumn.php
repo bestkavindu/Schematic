@@ -11,6 +11,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $client_id
  * @property string $name
  * @property string $type
+ * @property int|null $size
+ * @property int|null $precision
+ * @property int|null $scale
+ * @property bool $unsigned
+ * @property bool $auto_increment
  * @property bool $is_nullable
  * @property bool $is_pk
  * @property bool $is_unique
@@ -27,7 +32,9 @@ class SchemaColumn extends Model
 {
     /** @var list<string> */
     protected $fillable = [
-        'schema_table_id', 'client_id', 'name', 'type', 'is_nullable', 'is_pk',
+        'schema_table_id', 'client_id', 'name', 'type',
+        'size', 'precision', 'scale', 'unsigned', 'auto_increment',
+        'is_nullable', 'is_pk',
         'is_unique', 'is_index', 'default_value', 'fk_table', 'fk_column',
         'fk_type', 'fk_on_delete', 'fk_on_update', 'sort',
     ];
@@ -38,6 +45,11 @@ class SchemaColumn extends Model
     protected function casts(): array
     {
         return [
+            'size' => 'integer',
+            'precision' => 'integer',
+            'scale' => 'integer',
+            'unsigned' => 'boolean',
+            'auto_increment' => 'boolean',
             'is_nullable' => 'boolean',
             'is_pk' => 'boolean',
             'is_unique' => 'boolean',

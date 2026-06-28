@@ -185,3 +185,49 @@ test('an invalid table name throws before any SQL is built', function () {
         'tables' => [['id' => 't1', 'name' => 'bad name', 'columns' => []]],
     ]))->toThrow(InvalidArgumentException::class);
 });
+
+/** The logical-type equivalent of compilerSampleSchema() — same shape, neutral types. */
+function logicalSampleSchema(): array
+{
+    return [
+        'name' => 'Blog',
+        'tables' => [
+            [
+                'id' => 't_users', 'name' => 'users',
+                'columns' => [
+                    ['name' => 'id', 'type' => 'int64', 'autoInc' => true, 'unsigned' => true, 'pk' => true],
+                    ['name' => 'email', 'type' => 'varchar', 'size' => 255, 'unique' => true],
+                    ['name' => 'meta', 'type' => 'json', 'nullable' => true],
+                    ['name' => 'uid', 'type' => 'uuid'],
+                ],
+            ],
+            [
+                'id' => 't_posts', 'name' => 'posts',
+                'columns' => [
+                    ['name' => 'id', 'type' => 'int64', 'autoInc' => true, 'unsigned' => true, 'pk' => true],
+                    ['name' => 'author_id', 'type' => 'int64', 'unsigned' => true, 'index' => true, 'fk' => [
+                        'table' => 't_users', 'column' => 'id', 'type' => '1:N',
+                        'onDelete' => 'cascade', 'onUpdate' => 'no action',
+                    ]],
+                    ['name' => 'status', 'type' => 'varchar', 'size' => 255, 'default' => 'draft'],
+                ],
+            ],
+        ],
+    ];
+}
+
+test('logical types compile to identical DDL as their legacy equivalents (golden)', function () {
+    $legacy = (new PostgresSchemaCompiler)->compile(compilerSampleSchema());
+    $logical = (new PostgresSchemaCompiler)->compile(logicalSampleSchema());
+
+    expect($logical)->toBe($legacy);
+});
+
+test('logical types map to PostgreSQL equivalents (auto-increment id becomes BIGSERIAL)', function () {
+    $sql = implode("\n", (new PostgresSchemaCompiler)->compile(logicalSampleSchema()));
+
+    expect($sql)->toContain('"id" BIGSERIAL');
+    expect($sql)->toContain('"author_id" BIGINT');
+    expect($sql)->toContain('"email" VARCHAR(255) NOT NULL UNIQUE');
+    expect($sql)->toContain('FOREIGN KEY ("author_id") REFERENCES "users" ("id")');
+});
