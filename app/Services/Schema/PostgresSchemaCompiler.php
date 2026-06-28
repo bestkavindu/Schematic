@@ -119,7 +119,9 @@ final class PostgresSchemaCompiler
             $columns = [];
             foreach (($table['columns'] ?? []) as $column) {
                 $columns[(string) ($column['name'] ?? '')] = [
-                    'type' => (string) ($column['type'] ?? ''),
+                    // Normalize logical types to the legacy name the type map / FK
+                    // logic below is keyed by. Legacy rows pass through unchanged.
+                    'type' => LogicalType::toLaravel($column),
                     'key' => ! empty($column['pk']) || ! empty($column['unique']),
                 ];
             }
@@ -188,7 +190,7 @@ final class PostgresSchemaCompiler
             return $this->referenceType($target['type']);
         }
 
-        return self::TYPE[$column['type'] ?? ''] ?? 'VARCHAR(255)';
+        return self::TYPE[LogicalType::toLaravel($column)] ?? 'VARCHAR(255)';
     }
 
     /** The referencing type for a target column: a serial (`id`) PK is referenced as BIGINT. */

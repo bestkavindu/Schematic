@@ -283,3 +283,69 @@ test('saving a payload without groups leaves none and does not error', function 
 
     expect($project->refresh()->groups()->count())->toBe(0);
 });
+
+test('the schema_columns table has the logical type-attribute columns', function () {
+    expect(Schema::hasColumns('schema_columns', ['size', 'precision', 'scale', 'unsigned', 'auto_increment']))->toBeTrue();
+});
+
+test('saving persists logical type attributes and the schema round-trips them', function () {
+    $user = User::factory()->create();
+    $project = $user->schemaProjects()->create(['name' => 'Logical']);
+    $this->actingAs($user);
+
+    $payload = [
+        'name' => 'Logical',
+        'schemaVersion' => 2,
+        'tables' => [[
+            'id' => 't_a', 'name' => 'accounts', 'color' => 'blue', 'x' => 0, 'y' => 0, 'indexes' => [],
+            'columns' => [
+                ['id' => 'c1', 'name' => 'id', 'type' => 'int64', 'autoInc' => true, 'unsigned' => true, 'pk' => true, 'nullable' => false, 'unique' => false, 'index' => false, 'default' => '', 'fk' => null],
+                ['id' => 'c2', 'name' => 'handle', 'type' => 'varchar', 'size' => 100, 'nullable' => false, 'pk' => false, 'unique' => true, 'index' => false, 'default' => '', 'fk' => null],
+                ['id' => 'c3', 'name' => 'balance', 'type' => 'decimal', 'precision' => 12, 'scale' => 4, 'nullable' => true, 'pk' => false, 'unique' => false, 'index' => false, 'default' => '', 'fk' => null],
+            ],
+        ]],
+    ];
+
+    Livewire::test(Builder::class, ['project' => $project])
+        ->call('save', $payload)
+        ->assertHasNoErrors();
+
+    $cols = $project->refresh()->tables()->first()->columns()->get()->keyBy('client_id');
+
+    expect($cols['c1']->type)->toBe('int64');
+    expect($cols['c1']->auto_increment)->toBeTrue();
+    expect($cols['c1']->unsigned)->toBeTrue();
+    expect($cols['c2']->size)->toBe(100);
+    expect($cols['c3']->precision)->toBe(12);
+    expect($cols['c3']->scale)->toBe(4);
+
+    // schema() reserializes the attributes back to the canvas shape.
+    $schema = Livewire::test(Builder::class, ['project' => $project])->instance()->schema();
+    $serialized = collect($schema['tables'][0]['columns'])->keyBy('id');
+    expect($serialized['c1'])->toMatchArray(['type' => 'int64', 'autoInc' => true, 'unsigned' => true]);
+    expect($serialized['c2'])->toMatchArray(['type' => 'varchar', 'size' => 100]);
+    expect($serialized['c3'])->toMatchArray(['type' => 'decimal', 'precision' => 12, 'scale' => 4]);
+});
+
+test('saving still accepts legacy Laravel type names', function () {
+    $user = User::factory()->create();
+    $project = $user->schemaProjects()->create(['name' => 'Legacy types']);
+    $this->actingAs($user);
+
+    $payload = [
+        'name' => 'Legacy types',
+        'tables' => [[
+            'id' => 't_a', 'name' => 'widgets', 'color' => 'blue', 'x' => 0, 'y' => 0, 'indexes' => [],
+            'columns' => [
+                ['id' => 'c1', 'name' => 'id', 'type' => 'id', 'nullable' => false, 'pk' => true, 'unique' => false, 'index' => false, 'default' => '', 'fk' => null],
+                ['id' => 'c2', 'name' => 'name', 'type' => 'string', 'nullable' => false, 'pk' => false, 'unique' => false, 'index' => false, 'default' => '', 'fk' => null],
+            ],
+        ]],
+    ];
+
+    Livewire::test(Builder::class, ['project' => $project])
+        ->call('save', $payload)
+        ->assertHasNoErrors();
+
+    expect($project->refresh()->tables()->first()->columns()->where('client_id', 'c1')->first()->type)->toBe('id');
+});

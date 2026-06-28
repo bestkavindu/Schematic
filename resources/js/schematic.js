@@ -6,6 +6,7 @@
  */
 
 import JSZip from 'jszip';
+import { LOGICAL_TYPES, LOGICAL_META, normalizeLegacyType, toLegacyLaravelType } from './types.js';
 
 // ---------- static data (ported from the design's data.js) ----------
 const GEO = { CARD_W: 264, HEADER_H: 46, ROW_H: 34 };
@@ -15,21 +16,11 @@ const GROUP_MIN_W = 220, GROUP_MIN_H = 150;
 
 const COLOR_KEYS = ['blue', 'green', 'purple', 'amber', 'red', 'teal', 'orange', 'pink'];
 
-const LARAVEL_TYPES = [
-    'id', 'bigInteger', 'unsignedBigInteger', 'integer', 'string', 'text',
-    'boolean', 'date', 'datetime', 'timestamp', 'json', 'decimal', 'float', 'uuid',
-];
-
 // Referential actions offered for relationships (ON DELETE / ON UPDATE).
 const FK_ACTIONS = ['cascade', 'restrict', 'set null', 'no action'];
 
-const TYPE_LABEL = {
-    id: 'bigint', bigInteger: 'bigint', unsignedBigInteger: 'bigint',
-    integer: 'int', string: 'varchar', text: 'text', boolean: 'boolean',
-    date: 'date', datetime: 'datetime', timestamp: 'timestamp', json: 'json',
-    decimal: 'decimal', float: 'float', uuid: 'uuid',
-};
-
+// Legacy SQL type maps, keyed by Laravel type name. The exporters reach these via
+// toLegacyLaravelType(col), so a logical column maps to the same output as before.
 // SQL types for the (real) Export SQL feature.
 const SQL_TYPE = {
     id: 'BIGINT', bigInteger: 'BIGINT', unsignedBigInteger: 'BIGINT UNSIGNED',
@@ -79,8 +70,22 @@ const ACCENTS = {
 let _newId = 1000;
 const uid = (p) => p + (_newId++);
 
-function blankColumn(name = 'column', type = 'string') {
-    return { id: uid('c'), name, type, nullable: false, pk: false, unique: false, index: false, default: '', fk: null };
+// Build a column from a logical OR legacy type name. The type is normalized
+// (legacy names hydrate to a logical type + default attrs), so every code path
+// that creates columns — including the SQL/Prisma importers — yields logical types.
+function blankColumn(name = 'column', type = 'varchar', extra = {}) {
+    const norm = normalizeLegacyType(type);
+    return {
+        id: uid('c'), name,
+        type: norm.type,
+        size: norm.size ?? null,
+        precision: norm.precision ?? null,
+        scale: norm.scale ?? null,
+        unsigned: norm.unsigned ?? false,
+        autoInc: norm.autoInc ?? false,
+        nullable: false, pk: false, unique: false, index: false, default: '', fk: null,
+        ...extra,
+    };
 }
 function blankGroup(x, y, color) {
     return { id: uid('g'), name: 'New group', color: color || 'blue', x, y, w: 380, h: 280 };
@@ -89,13 +94,29 @@ function blankTable(x, y, color) {
     return {
         id: uid('t'), name: 'new_table', color: color || COLOR_KEYS[Math.floor(Math.random() * 8)],
         x, y,
-        columns: [blankColumn('id', 'id'), blankColumn('created_at', 'timestamp'), blankColumn('updated_at', 'timestamp')].map((c, i) => {
-            if (i === 0) c.pk = true;
-            if (i > 0) c.nullable = true;
-            return c;
-        }),
+        columns: [
+            blankColumn('id', 'int64', { pk: true, autoInc: true, unsigned: true }),
+            blankColumn('created_at', 'timestamp', { nullable: true }),
+            blankColumn('updated_at', 'timestamp', { nullable: true }),
+        ],
         indexes: [],
     };
+}
+
+// Ensure every column carries the logical attributes, hydrating legacy stored
+// types in place. Run once on load (server payload may hold pre-migration types).
+function hydrateColumns(tables) {
+    (tables || []).forEach((t) => {
+        (t && t.columns || []).forEach((c) => {
+            const norm = normalizeLegacyType(c.type);
+            c.type = norm.type;
+            if (c.size == null) c.size = norm.size ?? null;
+            if (c.precision == null) c.precision = norm.precision ?? null;
+            if (c.scale == null) c.scale = norm.scale ?? null;
+            if (c.unsigned == null) c.unsigned = norm.unsigned ?? false;
+            if (c.autoInc == null) c.autoInc = norm.autoInc ?? false;
+        });
+    });
 }
 
 // ---------- geometry ----------
@@ -238,10 +259,13 @@ function schematicBuilder(initial) {
         relMenuDragging: false,
 
         colorKeys: COLOR_KEYS,
-        types: LARAVEL_TYPES,
+        types: LOGICAL_TYPES,
         fkActions: FK_ACTIONS,
 
         init() {
+            // Hydrate legacy stored types to logical types before watchers attach,
+            // so loading a pre-migration project doesn't flag it as unsaved.
+            hydrateColumns(this.tables);
             this.applyAccent();
             this.applyRadius();
             this.$watch('tweaks.tablePalette', (v) => { this.palette = paletteMap(v); });
@@ -403,7 +427,25 @@ function schematicBuilder(initial) {
             if (col.unique || col.index) return icon('Hash', { size: 11, color: 'var(--faint)' });
             return '<span style="width:4px;height:4px;border-radius:4px;background:var(--faint)"></span>';
         },
-        typeLabel(col) { return (TYPE_LABEL[col.type] || col.type) + (col.nullable ? '?' : ''); },
+        typeLabel(col) {
+            const meta = LOGICAL_META[col.type];
+            let base = meta ? meta.label : col.type;
+            if (meta && meta.hasSize && col.size) base += `(${col.size})`;
+            else if (meta && meta.hasPrecisionScale && col.precision != null) base += `(${col.precision},${col.scale ?? 0})`;
+            return base + (col.nullable ? '?' : '');
+        },
+        typeMeta(type) { return LOGICAL_META[type] || {}; },
+        // Reconcile a column's attributes with its (just-changed) logical type:
+        // drop attributes the type can't carry, seed sensible defaults for the rest.
+        onColumnType(col) {
+            const meta = LOGICAL_META[col.type] || {};
+            if (!meta.hasSize) col.size = null;
+            else if (col.size == null) col.size = 255;
+            if (!meta.hasPrecisionScale) { col.precision = null; col.scale = null; }
+            else if (col.precision == null) { col.precision = 8; col.scale = 2; }
+            if (!meta.canUnsigned) col.unsigned = false;
+            if (!meta.canAutoInc) col.autoInc = false;
+        },
         colIconEditor(col) {
             if (col.pk) return icon('Key', { size: 13, color: 'var(--accent)' });
             if (col.fk) return icon('Link', { size: 13, color: 'var(--muted)' });
@@ -944,6 +986,7 @@ function schematicBuilder(initial) {
         payload() {
             return JSON.parse(JSON.stringify({
                 name: this.projectName,
+                schemaVersion: 2,
                 groups: this.groups.map((g) => ({
                     id: g.id, name: g.name, color: g.color, x: g.x, y: g.y, w: g.w, h: g.h,
                 })),
@@ -951,7 +994,10 @@ function schematicBuilder(initial) {
                     id: t.id, name: t.name, color: t.color, x: t.x, y: t.y,
                     indexes: t.indexes || [],
                     columns: t.columns.map((c) => ({
-                        id: c.id, name: c.name, type: c.type, nullable: !!c.nullable,
+                        id: c.id, name: c.name, type: c.type,
+                        size: c.size ?? null, precision: c.precision ?? null, scale: c.scale ?? null,
+                        unsigned: !!c.unsigned, autoInc: !!c.autoInc,
+                        nullable: !!c.nullable,
                         pk: !!c.pk, unique: !!c.unique, index: !!c.index,
                         default: c.default || '', fk: c.fk || null,
                     })),
@@ -1047,16 +1093,17 @@ function schematicBuilder(initial) {
                 if (!tgt) return null;
                 const col = tgt.columns.find((x) => x.name === c.fk.column);
                 if (!col) return null;
-                return col.type === 'id' ? 'BIGINT' : (typeMap[col.type] || 'VARCHAR(255)');
+                const lt = toLegacyLaravelType(col);
+                return lt === 'id' ? 'BIGINT' : (typeMap[lt] || 'VARCHAR(255)');
             };
             const lines = [];
             const alters = [];
             this.tables.forEach((t) => {
                 lines.push(`CREATE TABLE ${q(t.name)} (`);
                 const defs = t.columns.map((c) => {
-                    let d = `  ${q(c.name)} ${fkType(c) || typeMap[c.type] || 'VARCHAR(255)'}`;
+                    let d = `  ${q(c.name)} ${fkType(c) || typeMap[toLegacyLaravelType(c)] || 'VARCHAR(255)'}`;
                     // Postgres auto-increment comes from the SERIAL type itself.
-                    if (!pg && c.pk && c.type === 'id') d += ' AUTO_INCREMENT';
+                    if (!pg && c.pk && toLegacyLaravelType(c) === 'id') d += ' AUTO_INCREMENT';
                     d += c.nullable ? ' NULL' : ' NOT NULL';
                     if (c.default !== '' && c.default != null) d += ` DEFAULT ${c.default}`;
                     if (c.unique) d += ' UNIQUE';
@@ -1117,9 +1164,9 @@ function schematicBuilder(initial) {
                             return;
                         }
                     }
-                    let m = (MIG_TYPE[c.type] || "string('{n}')").replace('{n}', c.name);
+                    let m = (MIG_TYPE[toLegacyLaravelType(c)] || "string('{n}')").replace('{n}', c.name);
                     let line = `            $table->${m}`;
-                    if (c.nullable && c.type !== 'id') line += '->nullable()';
+                    if (c.nullable && toLegacyLaravelType(c) !== 'id') line += '->nullable()';
                     if (c.unique && !c.pk) line += '->unique()';
                     else if (c.index) line += '->index()';
                     if (c.default !== '' && c.default != null) line += `->default('${c.default}')`;
@@ -1159,12 +1206,12 @@ function schematicBuilder(initial) {
                 t.columns.forEach((c) => {
                     const settings = [];
                     if (c.pk) settings.push('pk');
-                    if (c.type === 'id') settings.push('increment');
+                    if (toLegacyLaravelType(c) === 'id') settings.push('increment');
                     if (c.unique && !c.pk) settings.push('unique');
                     if (!c.nullable && !c.pk) settings.push('not null');
                     if (c.default !== '' && c.default != null) settings.push('default: ' + fmtDefault(c.default));
                     const set = settings.length ? ` [${settings.join(', ')}]` : '';
-                    lines.push(`  ${ident(c.name)} ${DBML_TYPE[c.type] || 'varchar'}${set}`);
+                    lines.push(`  ${ident(c.name)} ${DBML_TYPE[toLegacyLaravelType(c)] || 'varchar'}${set}`);
                 });
                 lines.push('}', '');
             });
@@ -1203,7 +1250,7 @@ function schematicBuilder(initial) {
             const ON = { 'cascade': 'Cascade', 'restrict': 'Restrict', 'set null': 'SetNull', 'no action': 'NoAction' };
             const fmtDef = (c) => {
                 const v = String(c.default);
-                if (c.type === 'boolean') return /^(1|true)$/i.test(v) ? 'true' : 'false';
+                if (toLegacyLaravelType(c) === 'boolean') return /^(1|true)$/i.test(v) ? 'true' : 'false';
                 if (/^-?\d+(\.\d+)?$/.test(v)) return v;
                 if (/^(now\(\)|current_timestamp)$/i.test(v)) return 'now()';
                 if (/^uuid\(\)$/i.test(v)) return 'uuid()';
@@ -1216,14 +1263,15 @@ function schematicBuilder(initial) {
                 const uniq = (base) => { let n = base, i = 2; while (used.has(n)) n = base + i++; used.add(n); return n; };
                 lines.push(`model ${t.name} {`);
                 t.columns.forEach((c) => {
-                    let line = `  ${c.name} ${P_TYPE[c.type] || 'String'}`;
+                    const lt = toLegacyLaravelType(c);
+                    let line = `  ${c.name} ${P_TYPE[lt] || 'String'}`;
                     if (c.nullable && !c.pk) line += '?';
                     const attrs = [];
                     if (c.pk) attrs.push('@id');
-                    if (c.type === 'id') attrs.push('@default(autoincrement())');
+                    if (lt === 'id') attrs.push('@default(autoincrement())');
                     if (c.unique && !c.pk) attrs.push('@unique');
-                    if (c.type === 'text') attrs.push('@db.Text');
-                    if (c.type !== 'id' && c.default !== '' && c.default != null) attrs.push(`@default(${fmtDef(c)})`);
+                    if (lt === 'text') attrs.push('@db.Text');
+                    if (lt !== 'id' && c.default !== '' && c.default != null) attrs.push(`@default(${fmtDef(c)})`);
                     if (attrs.length) line += ' ' + attrs.join(' ');
                     lines.push(line);
                     if (c.fk) {
@@ -1279,8 +1327,8 @@ function schematicBuilder(initial) {
 
             const fillable = t.columns.filter((c) => !c.pk && !skip.has(c.name)).map((c) => c.name);
             const casts = t.columns
-                .filter((c) => CAST[c.type] && !skip.has(c.name))
-                .map((c) => `        '${c.name}' => '${CAST[c.type]}',`);
+                .filter((c) => CAST[toLegacyLaravelType(c)] && !skip.has(c.name))
+                .map((c) => `        '${c.name}' => '${CAST[toLegacyLaravelType(c)]}',`);
 
             const relUses = new Set();
             const methods = [];
@@ -1464,10 +1512,17 @@ function schematicBuilder(initial) {
                 y: Number.isFinite(t && t.y) ? t.y : 80,
                 indexes: Array.isArray(t && t.indexes) ? t.indexes : [],
                 columns: (Array.isArray(t && t.columns) ? t.columns : []).map((c) => {
-                    const col = blankColumn(String((c && c.name) || 'column'), String((c && c.type) || 'string'));
+                    const col = blankColumn(String((c && c.name) || 'column'), String((c && c.type) || 'varchar'));
                     col.nullable = !!c.nullable; col.pk = !!c.pk;
                     col.unique = !!c.unique; col.index = !!c.index;
                     col.default = c.default != null ? String(c.default) : '';
+                    // Restore logical type attributes from v2 exports (older exports lack them
+                    // and keep the defaults blankColumn derived from the type).
+                    if (c.size != null) col.size = c.size;
+                    if (c.precision != null) col.precision = c.precision;
+                    if (c.scale != null) col.scale = c.scale;
+                    if (c.unsigned != null) col.unsigned = !!c.unsigned;
+                    if (c.autoInc != null) col.autoInc = !!c.autoInc;
                     // FK target table is a client id — remap it; drop if it points outside this import.
                     if (c.fk && c.fk.table != null && idMap[c.fk.table]) {
                         col.fk = {

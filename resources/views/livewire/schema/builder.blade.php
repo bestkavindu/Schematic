@@ -472,10 +472,21 @@
                                         <div class="field"><span class="field-label">Name</span><input class="input mono" x-model="col.name" /></div>
                                         <div class="field">
                                             <span class="field-label">Type</span>
-                                            <select class="select" x-model="col.type">
-                                                <template x-for="ty in types" :key="ty"><option :value="ty" x-text="ty"></option></template>
+                                            <select class="select" x-model="col.type" @change="onColumnType(col)">
+                                                <template x-for="ty in types" :key="ty"><option :value="ty" x-text="typeMeta(ty).label || ty"></option></template>
                                             </select>
                                         </div>
+                                    </div>
+                                    <div class="field-row" x-show="typeMeta(col.type).hasSize || typeMeta(col.type).hasPrecisionScale">
+                                        <template x-if="typeMeta(col.type).hasSize">
+                                            <div class="field"><span class="field-label">Length</span><input type="number" min="0" class="input mono" placeholder="—" x-model.number="col.size" /></div>
+                                        </template>
+                                        <template x-if="typeMeta(col.type).hasPrecisionScale">
+                                            <div class="field"><span class="field-label">Precision</span><input type="number" min="0" class="input mono" placeholder="—" x-model.number="col.precision" /></div>
+                                        </template>
+                                        <template x-if="typeMeta(col.type).hasPrecisionScale">
+                                            <div class="field"><span class="field-label">Scale</span><input type="number" min="0" class="input mono" placeholder="—" x-model.number="col.scale" /></div>
+                                        </template>
                                     </div>
                                     <div class="field"><span class="field-label">Default value</span><input class="input mono" placeholder="—" x-model="col.default" /></div>
                                     <div style="border-top: 1px solid var(--border); padding-top: 2px;">
@@ -495,6 +506,18 @@
                                             <div class="toggle-meta"><div><div class="toggle-name">Primary key</div></div></div>
                                             <button class="switch" :class="{ on: col.pk }" @click="col.pk = !col.pk"></button>
                                         </div>
+                                        <template x-if="typeMeta(col.type).canUnsigned">
+                                            <div class="toggle-row">
+                                                <div class="toggle-meta"><div><div class="toggle-name">Unsigned</div><div class="toggle-desc">Disallow negative values</div></div></div>
+                                                <button class="switch" :class="{ on: col.unsigned }" @click="col.unsigned = !col.unsigned"></button>
+                                            </div>
+                                        </template>
+                                        <template x-if="typeMeta(col.type).canAutoInc">
+                                            <div class="toggle-row">
+                                                <div class="toggle-meta"><div><div class="toggle-name">Auto-increment</div><div class="toggle-desc">Database-assigned sequence</div></div></div>
+                                                <button class="switch" :class="{ on: col.autoInc }" @click="col.autoInc = !col.autoInc"></button>
+                                            </div>
+                                        </template>
                                     </div>
                                     <div style="border-top: 1px solid var(--border); padding-top: 10px;">
                                         <div class="field">
